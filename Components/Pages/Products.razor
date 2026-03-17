@@ -1,0 +1,180 @@
+@page "/products"
+@rendermode InteractiveServer
+@using ef_core_essentials_blazor.Services
+@inject ProductService ProductService
+
+<PageTitle>Products - EF Core Demo</PageTitle>
+
+<div class="container mt-4">
+    <h1 class="mb-4">?? Products - EF Core Best Practices Demo</h1>
+
+    <div class="alert alert-info">
+        <h5>?? This demo showcases:</h5>
+        <ul class="mb-0">
+            <li><strong>.Select()</strong> projection for performance</li>
+            <li><strong>Pagination</strong> with efficient Skip/Take</li>
+            <li><strong>ToQueryString()</strong> to see generated SQL</li>
+            <li><strong>TagWith()</strong> for query identification</li>
+            <li><strong>Soft Delete</strong> pattern (automatic)</li>
+            <li><strong>Multi-tenancy</strong> filtering by Site</li>
+        </ul>
+    </div>
+
+    <div class="row mb-3">
+        <div class="col-md-12">
+            <div class="btn-group" role="group">
+                <button class="btn btn-primary" @onclick="LoadProducts" disabled="@loading">
+                    @if (loading) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                    Load Products
+                </button>
+                <button class="btn btn-secondary" @onclick="LoadPaginated" disabled="@loading">
+                    Load Paginated (Page 1)
+                </button>
+                <button class="btn btn-info" @onclick="ShowGeneratedSql" disabled="@loading">
+                    Show Generated SQL
+                </button>
+            </div>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <strong>Error:</strong> @errorMessage
+            <button type="button" class="btn-close" @onclick="@(() => errorMessage = null)"></button>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(generatedSql))
+    {
+        <div class="alert alert-light border">
+            <h4>?? Generated SQL:</h4>
+            <pre class="bg-dark text-light p-3 rounded"><code>@generatedSql</code></pre>
+            <small class="text-muted">This shows the actual SQL query EF Core will send to the database</small>
+        </div>
+    }
+
+    @if (pagedResult != null)
+    {
+        <div class="alert alert-success">
+            <strong>?? Pagination Info:</strong> Page @pagedResult.Page of @pagedResult.TotalPages 
+            (Total: @pagedResult.TotalCount items, showing @pagedResult.Items.Count items)
+        </div>
+    }
+
+    @if (products != null && products.Any())
+    {
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">Product List (@products.Count items)</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover table-striped mb-0">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>ID</th>
+                                <th>Name</th>
+                                <th>Price</th>
+                                <th>Category</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var product in products)
+                            {
+                                <tr>
+                                    <td><span class="badge bg-secondary">@product.Id</span></td>
+                                    <td><strong>@product.Name</strong></td>
+                                    <td><span class="badge bg-success">@product.Price.ToString("N2") @product.Currency</span></td>
+                                    <td>@product.CategoryName</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+    else if (!loading && products != null)
+    {
+        <div class="alert alert-warning">
+            <strong>No products found.</strong> Click "Load Products" to fetch data.
+        </div>
+    }
+
+    @if (loading)
+    {
+        <div class="text-center mt-4">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2">Loading products...</p>
+        </div>
+    }
+</div>
+
+@code {
+    private List<ProductListDto>? products;
+    private PagedResult<ProductListDto>? pagedResult;
+    private string? generatedSql;
+    private string? errorMessage;
+    private bool loading = false;
+
+    private async Task LoadProducts()
+    {
+        try
+        {
+            loading = true;
+            errorMessage = null;
+            generatedSql = null;
+            pagedResult = null;
+            
+            products = await ProductService.GetProductsForListAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to load products: {ex.Message}";
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task LoadPaginated()
+    {
+        try
+        {
+            loading = true;
+            errorMessage = null;
+            generatedSql = null;
+            
+            pagedResult = await ProductService.GetProductsPaginatedAsync(1, 10);
+            products = pagedResult.Items;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to load paginated products: {ex.Message}";
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private void ShowGeneratedSql()
+    {
+        try
+        {
+            errorMessage = null;
+            products = null;
+            pagedResult = null;
+            
+            generatedSql = ProductService.GetProductQuerySql();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to generate SQL: {ex.Message}";
+        }
+    }
+}

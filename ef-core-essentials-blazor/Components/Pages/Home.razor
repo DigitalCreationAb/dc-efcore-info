@@ -1,0 +1,79 @@
+﻿@page "/"
+
+<PageTitle>Home</PageTitle>
+
+<div class="container mt-5">
+    <h1>🎯 EF Core Essentials - Blazor Demo</h1>
+    
+    <div class="alert alert-primary mt-4">
+        <h4>Welcome to EF Core Best Practices Demo!</h4>
+        <p>This project demonstrates comprehensive EF Core patterns for .NET 10 Blazor applications.</p>
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5>✅ What's Included</h5>
+                </div>
+                <div class="card-body">
+                    <ul>
+                        <li><strong>IEntityTypeConfiguration</strong> - Clean entity configs</li>
+                        <li><strong>Soft Delete Pattern</strong> - Automatic handling</li>
+                        <li><strong>Audit Trail</strong> - CreatedBy/UpdatedBy tracking</li>
+                        <li><strong>Multi-tenancy</strong> - Site-based filtering</li>
+                        <li><strong>Value Objects</strong> - PriceWithCurrency</li>
+                        <li><strong>Owned Entities</strong> - Address embedding</li>
+                        <li><strong>JSON Columns</strong> - Flexible metadata</li>
+                        <li><strong>Query Extensions</strong> - NO Repository pattern!</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5>🚀 Best Practices</h5>
+                </div>
+                <div class="card-body">
+                    <ul>
+                        <li><strong>Always use .Select()</strong> - Project only needed data</li>
+                        <li><strong>Pagination</strong> - Efficient Skip/Take</li>
+                        <li><strong>AsSplitQuery</strong> - Avoid cartesian explosion</li>
+                        <li><strong>ToQueryString()</strong> - Debug generated SQL</li>
+                        <li><strong>TagWith()</strong> - Track query origin</li>
+                        <li><strong>ExecuteUpdate/Delete</strong> - Bulk operations</li>
+                        <li><strong>AsyncEnumerable</strong> - Stream large datasets</li>
+                        <li><strong>Extension Methods</strong> - Better than Repository!</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mt-4">
+        <div class="card-header bg-warning">
+            <h5>⚠️ Important: DON'T use Repository pattern with EF Core!</h5>
+        </div>
+        <div class="card-body">
+            <p><strong>DbContext IS already a repository and unit of work.</strong></p>
+            <p>Use extension methods for reusable query logic instead of wrapping DbContext in a repository layer.</p>
+        </div>
+    </div>
+
+    <div class="d-grid gap-2 mt-4">
+        <a href="/products" class="btn btn-primary btn-lg">
+            🛒 View Products Demo
+        </a>
+    </div>
+
+    <div class="alert alert-info mt-4">
+        <h5>🗄️ Next Steps:</h5>
+        <ol>
+            <li>Run: <code>dotnet ef migrations add InitialCreate</code></li>
+            <li>Run: <code>dotnet ef database update</code></li>
+            <li>View the <a href="/products">Products page</a> to see EF Core in action!</li>
+        </ol>
+    </div>
+</div>
