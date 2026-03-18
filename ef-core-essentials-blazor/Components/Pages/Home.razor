@@ -1,79 +1,70 @@
 ﻿@page "/"
 
-<PageTitle>Home</PageTitle>
+<PageTitle>EF Core Essentials &mdash; .NET 10</PageTitle>
 
-<div class="container mt-5">
-    <h1>🎯 EF Core Essentials - Blazor Demo</h1>
-    
-    <div class="alert alert-primary mt-4">
-        <h4>Welcome to EF Core Best Practices Demo!</h4>
-        <p>This project demonstrates comprehensive EF Core patterns for .NET 10 Blazor applications.</p>
+<div class="dc-hero">
+    <div class="dc-hero-inner">
+        <div class="dc-hero-eyebrow">
+            <span class="dc-hero-badge">DC</span>
+            DigitalCreation &nbsp;&middot;&nbsp; LIA 2025
+        </div>
+        <h1 class="dc-hero-title">Entity Framework Core</h1>
+        <p class="dc-hero-sub">
+            Best practices &mdash; no Repository pattern, no overhead.
+        </p>
+        <div class="dc-hero-actions">
+            <a href="/products" class="btn btn-primary px-4">Products Demo</a>
+            <a href="/presentation" class="btn btn-outline-primary px-4">&#9654;&nbsp; Open Presentation</a>
+        </div>
     </div>
+</div>
 
-    <div class="row mt-4">
+<div class="container-xl px-4 py-5">
+    <div class="row g-4">
         <div class="col-md-6">
-            <div class="card">
-                <div class="card-header bg-success text-white">
-                    <h5>✅ What's Included</h5>
+            <div class="card h-100">
+                <div class="card-header d-flex align-items-center gap-2">
+                    <span class="dc-tag dc-tag--green">Included Patterns</span>
                 </div>
                 <div class="card-body">
-                    <ul>
-                        <li><strong>IEntityTypeConfiguration</strong> - Clean entity configs</li>
-                        <li><strong>Soft Delete Pattern</strong> - Automatic handling</li>
-                        <li><strong>Audit Trail</strong> - CreatedBy/UpdatedBy tracking</li>
-                        <li><strong>Multi-tenancy</strong> - Site-based filtering</li>
-                        <li><strong>Value Objects</strong> - PriceWithCurrency</li>
-                        <li><strong>Owned Entities</strong> - Address embedding</li>
-                        <li><strong>JSON Columns</strong> - Flexible metadata</li>
-                        <li><strong>Query Extensions</strong> - NO Repository pattern!</li>
+                    <ul class="dc-list">
+                        <li><code>IEntityTypeConfiguration</code> &mdash; clean entity config</li>
+                        <li><code>ISoftDelete</code> &mdash; automatic soft-delete in <code>SaveChangesAsync</code></li>
+                        <li><code>IAuditable</code> &mdash; <code>CreatedBy / UpdatedBy</code> auto-stamps</li>
+                        <li><code>IHaveSiteId</code> &mdash; compiler-enforced multi-tenant filters</li>
+                        <li><code>PriceWithCurrency</code> &mdash; value object with <code>[Owned]</code></li>
+                        <li>JSON columns via <code>OwnsOne / OwnsMany</code></li>
+                        <li>Compiled queries via <code>EF.CompileAsyncQuery</code></li>
+                        <li>Reusable pagination with <code>ToPagingAsync&lt;T&gt;()</code></li>
                     </ul>
                 </div>
             </div>
         </div>
-
         <div class="col-md-6">
-            <div class="card">
-                <div class="card-header bg-info text-white">
-                    <h5>🚀 Best Practices</h5>
+            <div class="card h-100">
+                <div class="card-header d-flex align-items-center gap-2">
+                    <span class="dc-tag dc-tag--accent">Best Practices</span>
                 </div>
                 <div class="card-body">
-                    <ul>
-                        <li><strong>Always use .Select()</strong> - Project only needed data</li>
-                        <li><strong>Pagination</strong> - Efficient Skip/Take</li>
-                        <li><strong>AsSplitQuery</strong> - Avoid cartesian explosion</li>
-                        <li><strong>ToQueryString()</strong> - Debug generated SQL</li>
-                        <li><strong>TagWith()</strong> - Track query origin</li>
-                        <li><strong>ExecuteUpdate/Delete</strong> - Bulk operations</li>
-                        <li><strong>AsyncEnumerable</strong> - Stream large datasets</li>
-                        <li><strong>Extension Methods</strong> - Better than Repository!</li>
+                    <ul class="dc-list">
+                        <li>Always <code>.Select()</code> on list queries &mdash; never over-fetch</li>
+                        <li>Extension methods on <code>IQueryable&lt;T&gt;</code> instead of Repository</li>
+                        <li>Interface-driven global query filters &mdash; compiler enforced</li>
+                        <li><code>.AsNoTracking()</code> for all read-only queries</li>
+                        <li><code>ExecuteUpdateAsync / ExecuteDeleteAsync</code> for bulk ops</li>
+                        <li><code>AsAsyncEnumerable</code> for streaming large result sets</li>
+                        <li><code>TagWith()</code> to label queries in logs &amp; traces</li>
+                        <li>Optimized EF Core &asymp; Dapper &asymp; ADO.NET throughput</li>
                     </ul>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="card mt-4">
-        <div class="card-header bg-warning">
-            <h5>⚠️ Important: DON'T use Repository pattern with EF Core!</h5>
-        </div>
-        <div class="card-body">
-            <p><strong>DbContext IS already a repository and unit of work.</strong></p>
-            <p>Use extension methods for reusable query logic instead of wrapping DbContext in a repository layer.</p>
-        </div>
-    </div>
-
-    <div class="d-grid gap-2 mt-4">
-        <a href="/products" class="btn btn-primary btn-lg">
-            🛒 View Products Demo
-        </a>
-    </div>
-
-    <div class="alert alert-info mt-4">
-        <h5>🗄️ Next Steps:</h5>
-        <ol>
-            <li>Run: <code>dotnet ef migrations add InitialCreate</code></li>
-            <li>Run: <code>dotnet ef database update</code></li>
-            <li>View the <a href="/products">Products page</a> to see EF Core in action!</li>
-        </ol>
+    <div class="dc-notice mt-4">
+        <strong>Don&apos;t wrap <code>DbContext</code> in a Repository.</strong>
+        <code>DbContext</code> already is the repository and unit of work.
+        A wrapper layer re-invents <code>DbSet&lt;T&gt;</code>, loses <code>IQueryable</code> composability,
+        and adds zero value. Use extension methods on <code>IQueryable&lt;T&gt;</code> instead.
     </div>
 </div>

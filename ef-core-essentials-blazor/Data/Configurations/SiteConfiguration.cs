@@ -20,6 +20,10 @@ public class SiteConfiguration : IEntityTypeConfiguration<Site>
             .IsRequired()
             .HasMaxLength(10);
 
+        builder.Property(s => s.Host)
+            .HasMaxLength(255);
+
         builder.HasIndex(s => s.Code).IsUnique();
+        builder.HasIndex(s => s.Host);  // Looked up on every request by middleware
     }
 }

@@ -1,15 +1,16 @@
 @page "/products"
 @rendermode InteractiveServer
 @using ef_core_essentials_blazor.Services
+@using ef_core_essentials_blazor.Extensions
 @inject ProductService ProductService
 
 <PageTitle>Products - EF Core Demo</PageTitle>
 
 <div class="container mt-4">
-    <h1 class="mb-4">?? Products - EF Core Best Practices Demo</h1>
+    <h1 class="mb-4">🛍️ Products - EF Core Best Practices Demo</h1>
 
     <div class="alert alert-info">
-        <h5>?? This demo showcases:</h5>
+        <h5>💡 This demo showcases:</h5>
         <ul class="mb-0">
             <li><strong>.Select()</strong> projection for performance</li>
             <li><strong>Pagination</strong> with efficient Skip/Take</li>
@@ -17,6 +18,8 @@
             <li><strong>TagWith()</strong> for query identification</li>
             <li><strong>Soft Delete</strong> pattern (automatic)</li>
             <li><strong>Multi-tenancy</strong> filtering by Site</li>
+            <li><strong>JSON Column Filtering</strong> - Query ProductMetadata.Specifications</li>
+            <li><strong>AsAsyncEnumerable</strong> - stream rows live with constant memory usage</li>
         </ul>
     </div>
 
@@ -37,6 +40,103 @@
         </div>
     </div>
 
+    <div class="card mb-3 border-warning">
+        <div class="card-header bg-warning text-dark">
+            <h5 class="mb-0">🔍 JSON Column Filtering - ProductMetadata.Specifications</h5>
+        </div>
+        <div class="card-body">
+            <p class="mb-3">
+                <strong>Example:</strong> Filter products by JSON specifications stored in ProductMetadata column.
+                EF Core translates dictionary queries to JSON_VALUE() in SQL.
+            </p>
+            <div class="row g-2">
+                <div class="col-md-3">
+                    <input type="text" class="form-control" @bind="specKey" placeholder="Spec Key (e.g., Color)" />
+                </div>
+                <div class="col-md-3">
+                    <input type="text" class="form-control" @bind="specValue" placeholder="Spec Value (e.g., Red)" />
+                </div>
+                <div class="col-md-6">
+                    <div class="btn-group" role="group">
+                        <button class="btn btn-warning" @onclick="FilterBySpecification" disabled="@loading">
+                            @if (loading) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                            Filter by Specification
+                        </button>
+                        <button class="btn btn-outline-warning" @onclick="FilterByBrand" disabled="@loading">
+                            Filter by Brand (Apple)
+                        </button>
+                        <button class="btn btn-outline-secondary" @onclick="ShowJsonQuerySql" disabled="@loading">
+                            Show JSON Query SQL
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <small class="text-muted d-block mt-2">
+                <strong>Try:</strong> Color=Red, Storage=512GB, or Brand=Apple
+            </small>
+        </div>
+    </div>
+
+    <div class="card mb-3 border-success">
+        <div class="card-header bg-success text-white">
+            <h5 class="mb-0">⚡ AsAsyncEnumerable - Live Streaming Demo</h5>
+        </div>
+        <div class="card-body">
+            <p class="mb-3">
+                <strong>Key difference vs <code>ToListAsync</code>:</strong>
+                <code>ToListAsync</code> waits for <em>all</em> rows, then returns them at once.
+                <code>AsAsyncEnumerable</code> yields each row as it arrives — the UI updates live and
+                memory usage stays constant no matter how large the dataset is.
+                Ideal for exports, reports, and ETL pipelines.
+            </p>
+            <div class="d-flex align-items-center gap-2 mb-3">
+                @if (!isStreaming)
+                {
+                    <button class="btn btn-success" @onclick="StartStreaming">
+                        &#9654; Start Streaming
+                    </button>
+                }
+                else
+                {
+                    <button class="btn btn-danger" @onclick="StopStreaming">
+                        &#9632; Cancel
+                    </button>
+                }
+                @if (streamedProducts.Count > 0 || isStreaming)
+                {
+                    <span class="badge bg-secondary fs-6">Received: @streamedProducts.Count rows</span>
+                    <span class="badge bg-success fs-6">Running total: @streamRunningTotal.ToString("N2") SEK</span>
+                }
+            </div>
+            @if (streamedProducts.Count > 0)
+            {
+                <div style="max-height: 300px; overflow-y: auto;">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead class="table-dark sticky-top">
+                            <tr>
+                                <th>ID</th>
+                                <th>Name</th>
+                                <th>Price</th>
+                                <th>Category</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var p in streamedProducts)
+                            {
+                                <tr>
+                                    <td><span class="badge bg-secondary">@p.Id</span></td>
+                                    <td>@p.Name</td>
+                                    <td>@p.Price.ToString("N2") @p.Currency</td>
+                                    <td>@p.CategoryName</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+
     @if (!string.IsNullOrEmpty(errorMessage))
     {
         <div class="alert alert-danger alert-dismissible fade show" role="alert">
@@ -48,7 +148,7 @@
     @if (!string.IsNullOrEmpty(generatedSql))
     {
         <div class="alert alert-light border">
-            <h4>?? Generated SQL:</h4>
+            <h4>📋 Generated SQL:</h4>
             <pre class="bg-dark text-light p-3 rounded"><code>@generatedSql</code></pre>
             <small class="text-muted">This shows the actual SQL query EF Core will send to the database</small>
         </div>
@@ -57,7 +157,7 @@
     @if (pagedResult != null)
     {
         <div class="alert alert-success">
-            <strong>?? Pagination Info:</strong> Page @pagedResult.Page of @pagedResult.TotalPages 
+            <strong>📄 Pagination Info:</strong>
             (Total: @pagedResult.TotalCount items, showing @pagedResult.Items.Count items)
         </div>
     }
@@ -95,6 +195,73 @@
             </div>
         </div>
     }
+
+    @if (productsWithMetadata != null && productsWithMetadata.Any())
+    {
+        <div class="card mt-3">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0">🔎 Filtered Products with Metadata (@productsWithMetadata.Count items)</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-warning">
+                            <tr>
+                                <th>ID</th>
+                                <th>Name</th>
+                                <th>Price</th>
+                                <th>Brand</th>
+                                <th>Specifications</th>
+                                <th>Tags</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var product in productsWithMetadata)
+                            {
+                                <tr>
+                                    <td><span class="badge bg-secondary">@product.Id</span></td>
+                                    <td><strong>@product.Name</strong></td>
+                                    <td><span class="badge bg-success">@product.Price.ToString("N2") @product.Currency</span></td>
+                                    <td>
+                                        @if (!string.IsNullOrEmpty(product.Brand))
+                                        {
+                                            <span class="badge bg-info">@product.Brand</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (product.Specifications.Any())
+                                        {
+                                            <small>
+                                                @foreach (var spec in product.Specifications.Take(3))
+                                                {
+                                                    <span class="badge bg-light text-dark me-1">@spec.Key: @spec.Value</span>
+                                                }
+                                                @if (product.Specifications.Count > 3)
+                                                {
+                                                    <span class="badge bg-light text-dark">+@(product.Specifications.Count - 3) more</span>
+                                                }
+                                            </small>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (product.Tags.Any())
+                                        {
+                                            <small>
+                                                @foreach (var tag in product.Tags.Take(3))
+                                                {
+                                                    <span class="badge bg-secondary me-1">@tag</span>
+                                                }
+                                            </small>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
     else if (!loading && products != null)
     {
         <div class="alert alert-warning">
@@ -115,10 +282,19 @@
 
 @code {
     private List<ProductListDto>? products;
+    private List<ProductWithMetadataDto>? productsWithMetadata;
     private PagedResult<ProductListDto>? pagedResult;
     private string? generatedSql;
     private string? errorMessage;
     private bool loading = false;
+    private string specKey = "Color";
+    private string specValue = "Red";
+
+    // Streaming state
+    private List<ProductListDto> streamedProducts = new();
+    private decimal streamRunningTotal = 0;
+    private bool isStreaming = false;
+    private CancellationTokenSource? _streamCts;
 
     private async Task LoadProducts()
     {
@@ -128,7 +304,8 @@
             errorMessage = null;
             generatedSql = null;
             pagedResult = null;
-            
+            productsWithMetadata = null;
+
             products = await ProductService.GetProductsForListAsync();
         }
         catch (Exception ex)
@@ -148,7 +325,8 @@
             loading = true;
             errorMessage = null;
             generatedSql = null;
-            
+            productsWithMetadata = null;
+
             pagedResult = await ProductService.GetProductsPaginatedAsync(1, 10);
             products = pagedResult.Items;
         }
@@ -169,12 +347,130 @@
             errorMessage = null;
             products = null;
             pagedResult = null;
-            
+            productsWithMetadata = null;
+
             generatedSql = ProductService.GetProductQuerySql();
         }
         catch (Exception ex)
         {
             errorMessage = $"Failed to generate SQL: {ex.Message}";
         }
+    }
+
+    private async Task FilterBySpecification()
+    {
+        try
+        {
+            loading = true;
+            errorMessage = null;
+            generatedSql = null;
+            products = null;
+            pagedResult = null;
+
+            if (string.IsNullOrWhiteSpace(specKey) || string.IsNullOrWhiteSpace(specValue))
+            {
+                errorMessage = "Please enter both specification key and value";
+                return;
+            }
+
+            productsWithMetadata = await ProductService.FilterBySpecificationAsync(specKey, specValue);
+
+            if (!productsWithMetadata.Any())
+            {
+                errorMessage = $"No products found with {specKey}={specValue}";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to filter products: {ex.Message}";
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task FilterByBrand()
+    {
+        try
+        {
+            loading = true;
+            errorMessage = null;
+            generatedSql = null;
+            products = null;
+            pagedResult = null;
+
+            productsWithMetadata = await ProductService.FilterByBrandAsync("Apple");
+
+            if (!productsWithMetadata.Any())
+            {
+                errorMessage = "No Apple products found";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to filter by brand: {ex.Message}";
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private void ShowJsonQuerySql()
+    {
+        try
+        {
+            errorMessage = null;
+            products = null;
+            pagedResult = null;
+            productsWithMetadata = null;
+
+            if (string.IsNullOrWhiteSpace(specKey) || string.IsNullOrWhiteSpace(specValue))
+            {
+                errorMessage = "Please enter both specification key and value to see SQL";
+                return;
+            }
+
+            generatedSql = ProductService.GetFilterBySpecificationQuerySql(specKey, specValue);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to generate JSON query SQL: {ex.Message}";
+        }
+    }
+
+    private async Task StartStreaming()
+    {
+        streamedProducts = new();
+        streamRunningTotal = 0;
+        isStreaming = true;
+        _streamCts = new CancellationTokenSource();
+
+        try
+        {
+            await foreach (var product in ProductService.StreamProductsAsync(_streamCts.Token))
+            {
+                streamedProducts.Add(product);
+                streamRunningTotal += product.Price;
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // User cancelled — expected, not an error
+        }
+        finally
+        {
+            isStreaming = false;
+            _streamCts?.Dispose();
+            _streamCts = null;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void StopStreaming()
+    {
+        _streamCts?.Cancel();
     }
 }

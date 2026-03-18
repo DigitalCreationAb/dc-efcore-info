@@ -2,7 +2,7 @@ using ef_core_essentials_blazor.Models.ValueObjects;
 
 namespace ef_core_essentials_blazor.Models;
 
-public class Product : ISoftDelete, IAuditable
+public class Product : ISoftDelete, IAuditable, IHaveSiteId
 {
     public int Id { get; set; }
     public string Name { get; set; } = string.Empty;
@@ -45,6 +45,17 @@ public class ProductMetadata
 {
     public string? Brand { get; set; }
     public string? Manufacturer { get; set; }
-    public Dictionary<string, string> Specifications { get; set; } = new();
+    public List<Specification> Specifications { get; set; } = new();
     public List<string> Tags { get; set; } = new();
+}
+
+/// <summary>
+/// Key/value pair stored as a JSON array element within ProductMetadata.Specifications.
+/// Using a class instead of Dictionary&lt;string,string&gt; lets EF Core map it as an owned
+/// entity collection and translate queries to OPENJSON SQL.
+/// </summary>
+public class Specification
+{
+    public string Key { get; set; } = string.Empty;
+    public string Value { get; set; } = string.Empty;
 }

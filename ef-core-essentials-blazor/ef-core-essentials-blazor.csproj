@@ -7,6 +7,7 @@
     <RootNamespace>ef_core_essentials_blazor</RootNamespace>
     <AssemblyName>$(AssemblyName.Replace(' ', '_'))</AssemblyName>
     <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
+    <UserSecretsId>21ae1f19-42c9-485d-9f18-f804f54f92be</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>

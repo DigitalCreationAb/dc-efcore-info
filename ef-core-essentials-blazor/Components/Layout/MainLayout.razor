@@ -1,9 +1,25 @@
 ﻿@inherits LayoutComponentBase
 
-@Body
+<header class="dc-topbar">
+    <div class="dc-topbar-inner">
+        <a href="/" class="dc-topbar-brand">
+            <span class="dc-topbar-logo">DC</span>
+            <span class="dc-topbar-name">EF Core Essentials</span>
+        </a>
+        <nav class="dc-topbar-nav">
+            <a href="/" class="dc-nav-link">Home</a>
+            <a href="/products" class="dc-nav-link">Products</a>
+            <a href="/presentation" class="dc-nav-link dc-nav-link--cta">&#9654;&nbsp; Presentation</a>
+        </nav>
+    </div>
+</header>
+
+<main class="dc-main">
+    @Body
+</main>
 
 <div id="blazor-error-ui" data-nosnippet>
     An unhandled error has occurred.
     <a href="." class="reload">Reload</a>
-    <span class="dismiss">🗙</span>
+    <span class="dismiss">&#x2715;</span>
 </div>

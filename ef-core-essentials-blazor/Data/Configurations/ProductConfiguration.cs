@@ -22,23 +22,20 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
         builder.Property(p => p.Description)
             .HasMaxLength(2000);
 
-        // Complex type / Value object configuration
-        builder.OwnsOne(p => p.Price, priceBuilder =>
-        {
-            priceBuilder.Property(p => p.Amount)
-                .HasColumnName("Price")
-                .HasPrecision(18, 2);
-            
-            priceBuilder.Property(p => p.Currency)
-                .HasColumnName("Currency")
-                .HasMaxLength(3);
-        });
+        // PriceWithCurrency is marked [Owned] with [Column]/[Precision] data annotations
+        // so EF Core configures it automatically - no OwnsOne needed here.
 
         // JSON column - useful for flexible metadata
         // WARNING: Can become large - always use .Select() to avoid loading unnecessary data
         builder.OwnsOne(p => p.Metadata, metadataBuilder =>
         {
             metadataBuilder.ToJson("Metadata");
+
+            // Specification is an owned entity collection → maps to JSON array.
+            // EF Core translates .Any()/.Where() on this to OPENJSON in SQL Server.
+            metadataBuilder.OwnsMany(m => m.Specifications);
+
+            // List<string> is a primitive collection - natively supported in EF Core 8+
         });
 
         // Relations
@@ -52,8 +49,8 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
             .HasForeignKey(p => p.SiteId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        // Global query filter for soft delete
-        builder.HasQueryFilter(p => !p.IsDeleted);
+        // Global query filter with site isolation is set in AppDbContext.OnModelCreating
+        // because it needs access to the scoped ICurrentUserService.
 
         // Indexes
         builder.HasIndex(p => p.SiteId);

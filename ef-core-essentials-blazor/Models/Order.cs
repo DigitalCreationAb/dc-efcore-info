@@ -1,6 +1,6 @@
 namespace ef_core_essentials_blazor.Models;
 
-public class Order : ISoftDelete, IAuditable
+public class Order : ISoftDelete, IAuditable, IHaveSiteId
 {
     public int Id { get; set; }
     public string OrderNumber { get; set; } = string.Empty;

@@ -1,4 +1,5 @@
 using ef_core_essentials_blazor.Models;
+using Microsoft.EntityFrameworkCore;
 
 namespace ef_core_essentials_blazor.Extensions;
 
@@ -30,16 +31,6 @@ public static class QueryExtensions
     }
 
     /// <summary>
-    /// Generic pagination extension
-    /// </summary>
-    public static IQueryable<T> Paginate<T>(this IQueryable<T> query, int page, int pageSize)
-    {
-        return query
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize);
-    }
-
-    /// <summary>
     /// Search by name
     /// </summary>
     public static IQueryable<Product> SearchByName(this IQueryable<Product> query, string? searchTerm)
@@ -49,4 +40,48 @@ public static class QueryExtensions
 
         return query.Where(p => p.Name.Contains(searchTerm));
     }
+
+    /// <summary>
+    /// Executes the query as a paginated result.
+    /// Apply ordering and .Select() projection before calling this.
+    /// </summary>
+    public static async Task<PagedResult<T>> ToPagingAsync<T>(
+        this IQueryable<T> query,
+        PagingOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        var pageSize = Math.Min(options.PageSize, PagingOptions.MaxPageSize);
+
+        var totalCount = await query.CountAsync(cancellationToken);
+
+        var items = await query
+            .Skip((options.Page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        return new PagedResult<T>
+        {
+            Items = items,
+            TotalCount = totalCount,
+            Page = options.Page,
+            PageSize = pageSize
+        };
+    }
+}
+
+public class PagingOptions
+{
+    public const int MaxPageSize = 100;
+
+    public int Page { get; init; } = 1;
+    public int PageSize { get; init; } = 20;
+}
+
+public class PagedResult<T>
+{
+    public List<T> Items { get; set; } = new();
+    public int TotalCount { get; set; }
+    public int Page { get; set; }
+    public int PageSize { get; set; }
+    public int TotalPages => (int)Math.Ceiling(TotalCount / (double)PageSize);
 }

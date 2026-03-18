@@ -1,0 +1,978 @@
+@page "/presentation"
+@rendermode InteractiveServer
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<div class="pres-root">
+
+    <header class="pres-header">
+        <div class="pres-logo">DC</div>
+        <div class="pres-header-title">EF Core Essentials &mdash; .NET 10</div>
+        @if (_slide > 0)
+        {
+            <span class="pres-chapter-label">@_chapters[_slide]</span>
+        }
+        <div class="pres-nav">
+            <button class="pres-btn" @onclick="Prev" disabled="@(_slide == 0)" title="Previous (←)">&#8592;</button>
+            <span class="pres-counter">@(_slide + 1)&thinsp;/&thinsp;@TotalSlides</span>
+            <button class="pres-btn" @onclick="Next" disabled="@(_slide == TotalSlides - 1)" title="Next (→)">&#8594;</button>
+        </div>
+    </header>
+
+    <main class="pres-main">
+
+        @* ──────────────────────────────────────────────────────────
+           SLIDE 0 — Title
+           ────────────────────────────────────────────────────────── *@
+        @if (_slide == 0)
+        {
+            <div class="slide slide--title">
+                <div class="title-logo"><span>DC</span> DigitalCreation</div>
+                <h1 class="slide-h slide-h--xl">Entity Framework Core</h1>
+                <p style="font-size:1.25rem;color:#94a3b8;margin:0.25rem 0 0;">Best Practices</p>
+                <div class="title-rule"></div>
+                <div class="title-pills">
+                    <span class="pill">No Repository Pattern</span>
+                    <span class="pill">IQueryable Composition</span>
+                    <span class="pill">Interface-Driven Filters</span>
+                    <span class="pill">Compiled Queries</span>
+                    <span class="pill">JSON Columns</span>
+                    <span class="pill">Streaming</span>
+                    <span class="pill">Bulk Operations</span>
+                </div>
+            </div>
+        }
+
+        @* ──────────────────────────────────────────────────────────
+           SLIDE 1 — Why NOT Repository Pattern
+           ────────────────────────────────────────────────────────── *@
+        @if (_slide == 1)
+        {
+            <div class="slide">
+                <div class="slide-meta">
+                    <span class="ch-tag">Chapter 1 · Foundations</span>
+                    <span class="file-badge">Services/ProductService.cs</span>
+                </div>
+                <h1 class="slide-h">Why NOT the Repository Pattern?</h1>
+                <p class="slide-p"><code>DbContext</code> already IS the repository <em>and</em> the unit of work. Adding another layer re-invents what you already have.</p>
+
+                <div class="slide-grid-2">
+                    <div class="card-s card-s--bad">
+                        <span class="badge-label badge-label--bad">Don&apos;t</span>
+                        <pre class="code"><code><span class="cm">// Wrapping DbContext adds zero value</span>
+<span class="kw">public interface</span> <span class="tp">IProductRepository</span>
+{
+    <span class="tp">Task</span>&lt;<span class="tp">List</span>&lt;<span class="tp">Product</span>&gt;&gt; <span class="mt">GetAllAsync</span>();
+    <span class="tp">Task</span>&lt;<span class="tp">Product</span>?&gt; <span class="mt">GetByIdAsync</span>(<span class="kw">int</span> id);
+    <span class="tp">Task</span> <span class="mt">AddAsync</span>(<span class="tp">Product</span> p);
+    <span class="tp">Task</span> <span class="mt">SaveAsync</span>();
+    <span class="cm">// ...you've re-invented DbSet&lt;T&gt;</span>
+}
+
+<span class="cm">// What you lose:</span>
+<span class="cm">// ✗ IQueryable composability</span>
+<span class="cm">// ✗ .AsNoTracking(), .TagWith()</span>
+<span class="cm">// ✗ Every new entity = new repository</span></code></pre>
+                    </div>
+                    <div class="card-s card-s--good">
+                        <span class="badge-label badge-label--good">Do This</span>
+                        <pre class="code"><code><span class="cm">// Use DbContext directly in services</span>
+<span class="kw">public class</span> <span class="tp">ProductService</span>(<span class="tp">AppDbContext</span> ctx)
+{
+    <span class="kw">public async</span> <span class="tp">Task</span>&lt;<span class="tp">List</span>&lt;<span class="tp">ProductDto</span>&gt;&gt; <span class="mt">GetAsync</span>()
+        =&gt; <span class="kw">await</span> ctx.Products
+            .<span class="mt">WhereActive</span>()       <span class="cm">// extension method</span>
+            .<span class="mt">Select</span>(p =&gt; <span class="kw">new</span> <span class="tp">ProductDto</span> { ... })
+            .<span class="mt">ToListAsync</span>();
+}
+
+<span class="cm">// What you keep:</span>
+<span class="cm">// ✓ Full IQueryable composability</span>
+<span class="cm">// ✓ All EF Core features available</span>
+<span class="cm">// ✓ No extra abstraction layer</span></code></pre>
+                    </div>
+                </div>
+                <div class="callout">
+                    <strong>DbContext = IRepository + IUnitOfWork.</strong> It tracks changes,
+                    manages transactions, and exposes <code>IQueryable&lt;T&gt;</code> for every entity.
+                    A repository wrapper loses composability and forces you to re-expose the full API with no benefit.
+                </div>
+            </div>
+        }
+
+        @* ──────────────────────────────────────────────────────────
+           SLIDE 2 — IQueryable<T> Deferred Execution
+           ────────────────────────────────────────────────────────── *@
+        @if (_slide == 2)
+        {
+            <div class="slide">
+                <div class="slide-meta">
+                    <span class="ch-tag">Chapter 1 · Foundations</span>
+                    <span class="file-badge">Services/ProductService.cs</span>
+                </div>
+                <h1 class="slide-h">IQueryable&lt;T&gt; — Nothing Runs Until You Ask</h1>
+                <p class="slide-p">Every LINQ operator builds the query. Only the terminal operators send SQL to the database.</p>
+
+                <div class="slide-grid-2">
+                    <div>
+                        <pre class="code" style="height:100%;"><code><span class="kw">var</span> query = ctx.Products
+    .<span class="mt">TagWith</span>(<span class="st">"GetProducts"</span>)   <span class="cm">// IQueryable — no SQL</span>
+    .<span class="mt">Where</span>(p =&gt; p.Stock &gt; 0)  <span class="cm">// IQueryable — no SQL</span>
+    .<span class="mt">OrderBy</span>(p =&gt; p.Name)      <span class="cm">// IQueryable — no SQL</span>
+    .<span class="mt">Select</span>(p =&gt; <span class="kw">new</span> <span class="tp">Dto</span> {...})<span class="cm">// IQueryable — no SQL</span>
+
+<span class="cm">// SQL executes HERE ↓ ↓ ↓</span>
+<span class="kw">var</span> list = <span class="kw">await</span> query.<span class="mt">ToListAsync</span>();
+<span class="kw">var</span> one  = <span class="kw">await</span> query.<span class="mt">FirstOrDefaultAsync</span>();
+<span class="kw">var</span> n    = <span class="kw">await</span> query.<span class="mt">CountAsync</span>();
+
+<span class="cm">// Cross-service composition — still one DB call</span>
+<span class="kw">var</span> filtered = baseService.<span class="mt">GetBaseQuery</span>()
+    .<span class="mt">Where</span>(p =&gt; p.Price.Amount &gt; <span class="nm">500</span>)
+    .<span class="mt">Select</span>(...);
+<span class="kw">var</span> result = <span class="kw">await</span> filtered.<span class="mt">ToListAsync</span>();
+<span class="cm">// Still ONE round-trip to the database</span></code></pre>
+                    </div>
+                    <div style="display:flex;flex-direction:column;gap:1rem;">
+                        <div class="card-s">
+                            <span class="badge-label badge-label--info">Terminal operators (execute SQL)</span>
+                            <ul class="pts" style="margin-top:0.5rem;">
+                                <li class="g"><code>ToListAsync()</code> &mdash; SELECT all matching rows</li>
+                                <li class="g"><code>FirstOrDefaultAsync()</code> &mdash; SELECT TOP 1</li>
+                                <li class="g"><code>CountAsync()</code> &mdash; SELECT COUNT(*)</li>
+                                <li class="g"><code>AnyAsync()</code> &mdash; SELECT TOP 1 (exists check)</li>
+                                <li class="g"><code>ToQueryString()</code> &mdash; returns SQL string (no DB call)</li>
+                            </ul>
+                        </div>
+                        <div class="card-s card-s--accent">
+                            <span class="badge-label badge-label--info">Why this matters</span>
+                            <ul class="pts" style="margin-top:0.5rem;">
+                                <li>Pass <code>IQueryable</code> between services &mdash; conditions compose into <strong>one query</strong></li>
+                                <li>Add pagination, filtering, ordering <strong>after</strong> defining the base query</li>
+                                <li>The database sees one optimized SQL statement regardless of how many <code>.Where()</code> calls you chain</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        @* ──────────────────────────────────────────────────────────
+           SLIDE 3 — .Select() for Lists
+           ────────────────────────────────────────────────────────── *@
+        @if (_slide == 3)
+        {
+            <div class="slide">
+                <div class="slide-meta">
+                    <span class="ch-tag">Chapter 2 · Data Access Patterns</span>
+                    <span class="file-badge">Services/ProductService.cs</span>
+                </div>
+                <h1 class="slide-h">Always <code>.Select()</code> When Loading Lists</h1>
+                <p class="slide-p">Projecting to a DTO is the single biggest performance lever you have. Without it, every column &mdash; including large JSON blobs &mdash; travels over the wire.</p>
+
+                <div class="slide-grid-2">
+                    <div class="card-s card-s--bad">
+                        <span class="badge-label badge-label--bad">Without .Select()</span>
+                        <pre class="code"><code><span class="cm">// Loads ALL columns for every row:</span>
+<span class="cm">// Id, Name, Description, Price, Currency,</span>
+<span class="cm">// Stock, SiteId, CategoryId,</span>
+<span class="cm">// Metadata (potentially large JSON!),</span>
+<span class="cm">// IsDeleted, CreatedAt, CreatedBy,</span>
+<span class="cm">// UpdatedAt, UpdatedBy...</span>
+<span class="kw">var</span> products = <span class="kw">await</span> ctx.Products
+    .<span class="mt">ToListAsync</span>();
+
+<span class="cm">// Generated SQL:</span>
+<span class="cm">// SELECT [Id],[Name],[Description],</span>
+<span class="cm">// [Price],[Currency],[Stock],</span>
+<span class="cm">// [Metadata],[IsDeleted],... (all 14 cols)</span></code></pre>
+                    </div>
+                    <div class="card-s card-s--good">
+                        <span class="badge-label badge-label--good">With .Select()</span>
+                        <pre class="code"><code><span class="cm">// Only 5 columns. Metadata stays in the DB.</span>
+<span class="kw">var</span> products = <span class="kw">await</span> ctx.Products
+    .<span class="mt">Select</span>(p =&gt; <span class="kw">new</span> <span class="tp">ProductListDto</span>
+    {
+        Id           = p.Id,
+        Name         = p.Name,
+        Price        = p.Price.Amount,
+        Currency     = p.Price.Currency,
+        CategoryName = p.Category.Name <span class="cm">// JOIN!</span>
+    })
+    .<span class="mt">ToListAsync</span>();
+
+<span class="cm">// Generated SQL:</span>
+<span class="cm">// SELECT p.Id, p.Name, p.Price,</span>
+<span class="cm">// p.Currency, c.Name AS CategoryName</span>
+<span class="cm">// FROM Products p JOIN Categories c ...</span></code></pre>
+                    </div>
+                </div>
+                <div class="callout callout--warn" style="margin-top:1rem;">
+                    <strong>Rule of thumb:</strong> Use <code>.Select()</code> whenever loading a <strong>list</strong>.
+                    For a <strong>single item by PK</strong> (e.g. before updating), loading the full entity is fine &mdash;
+                    EF Core needs the tracked entity to detect changes.
+                </div>
+            </div>
+        }
+
+        @* ──────────────────────────────────────────────────────────
+           SLIDE 4 — Extension Methods for Query Logic
+           ────────────────────────────────────────────────────────── *@
+        @if (_slide == 4)
+        {
+            <div class="slide">
+                <div class="slide-meta">
+                    <span class="ch-tag">Chapter 2 · Data Access Patterns</span>
+                    <span class="file-badge">Extensions/QueryExtensions.cs</span>
+                </div>
+                <h1 class="slide-h">Extension Methods Over Repository</h1>
+                <p class="slide-p">Reusable query logic without losing <code>IQueryable</code> composability. The query still compiles to a single SQL statement.</p>
+
+                <div class="slide-grid-2">
+                    <pre class="code"><code><span class="cm">// Extensions/QueryExtensions.cs</span>
+
+<span class="kw">public static</span> <span class="tp">IQueryable</span>&lt;<span class="tp">Product</span>&gt; <span class="mt">WhereActive</span>(
+    <span class="kw">this</span> <span class="tp">IQueryable</span>&lt;<span class="tp">Product</span>&gt; q)
+    =&gt; q.<span class="mt">Where</span>(p =&gt; p.Stock &gt; <span class="nm">0</span> &amp;&amp; !p.IsDeleted);
+
+<span class="kw">public static</span> <span class="tp">IQueryable</span>&lt;<span class="tp">Product</span>&gt; <span class="mt">ForCurrentSite</span>(
+    <span class="kw">this</span> <span class="tp">IQueryable</span>&lt;<span class="tp">Product</span>&gt; q, <span class="kw">int</span>? siteId)
+    =&gt; siteId.<span class="mt">HasValue</span>
+        ? q.<span class="mt">Where</span>(p =&gt; p.SiteId == siteId.<span class="mt">Value</span>)
+        : q;
+
+<span class="kw">public static</span> <span class="tp">IQueryable</span>&lt;<span class="tp">Product</span>&gt; <span class="mt">SearchByName</span>(
+    <span class="kw">this</span> <span class="tp">IQueryable</span>&lt;<span class="tp">Product</span>&gt; q, <span class="kw">string</span>? term)
+    =&gt; <span class="kw">string</span>.<span class="mt">IsNullOrWhiteSpace</span>(term)
+        ? q
+        : q.<span class="mt">Where</span>(p =&gt; p.Name.<span class="mt">Contains</span>(term));</code></pre>
+
+                    <div style="display:flex;flex-direction:column;gap:1rem;">
+                        <pre class="code"><code><span class="cm">// Still fully composable — one SQL query</span>
+<span class="kw">var</span> result = <span class="kw">await</span> ctx.Products
+    .<span class="mt">WhereActive</span>()
+    .<span class="mt">ForCurrentSite</span>(siteId)
+    .<span class="mt">SearchByName</span>(searchTerm)
+    .<span class="mt">Where</span>(p =&gt; p.Price.Amount &gt; <span class="nm">500</span>)
+    .<span class="mt">OrderBy</span>(p =&gt; p.Name)
+    .<span class="mt">Select</span>(p =&gt; <span class="kw">new</span> <span class="tp">ProductListDto</span> {...})
+    .<span class="mt">ToPagingAsync</span>(opts);</code></pre>
+
+                        <div class="card-s card-s--accent">
+                            <span class="badge-label badge-label--info">Why extension methods win</span>
+                            <ul class="pts" style="margin-top:0.5rem;">
+                                <li>Returns <code>IQueryable</code> &mdash; caller can keep adding conditions</li>
+                                <li>No interface to define, no class to register</li>
+                                <li>Works for any query, not bound to a Repository class</li>
+                                <li>EF Core folds everything into <strong>one SQL query</strong></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        @* ──────────────────────────────────────────────────────────
+           SLIDE 5 — ToPagingAsync
+           ────────────────────────────────────────────────────────── *@
+        @if (_slide == 5)
+        {
+            <div class="slide">
+                <div class="slide-meta">
+                    <span class="ch-tag">Chapter 2 · Data Access Patterns</span>
+                    <span class="file-badge">Extensions/QueryExtensions.cs</span>
+                </div>
+                <h1 class="slide-h">Reusable Pagination with <code>ToPagingAsync&lt;T&gt;()</code></h1>
+                <p class="slide-p">One extension method handles every paginated query in the codebase. Apply ordering and <code>.Select()</code> first, then call it.</p>
+
+                <div class="slide-grid-2">
+                    <pre class="code"><code><span class="cm">// QueryExtensions.cs — defined once, used everywhere</span>
+<span class="kw">public static async</span> <span class="tp">Task</span>&lt;<span class="tp">PagedResult</span>&lt;<span class="tp">T</span>&gt;&gt; <span class="mt">ToPagingAsync</span>&lt;<span class="tp">T</span>&gt;(
+    <span class="kw">this</span> <span class="tp">IQueryable</span>&lt;<span class="tp">T</span>&gt; query,
+    <span class="tp">PagingOptions</span> opts,
+    <span class="tp">CancellationToken</span> ct = <span class="kw">default</span>)
+{
+    <span class="kw">var</span> pageSize   = <span class="tp">Math</span>.<span class="mt">Min</span>(opts.PageSize, <span class="tp">PagingOptions</span>.MaxPageSize);
+    <span class="kw">var</span> totalCount = <span class="kw">await</span> query.<span class="mt">CountAsync</span>(ct);   <span class="cm">// SELECT COUNT(*)</span>
+    <span class="kw">var</span> items      = <span class="kw">await</span> query
+        .<span class="mt">Skip</span>((opts.Page - <span class="nm">1</span>) * pageSize)
+        .<span class="mt">Take</span>(pageSize)
+        .<span class="mt">ToListAsync</span>(ct);                           <span class="cm">// SELECT with OFFSET</span>
+    <span class="kw">return new</span> <span class="tp">PagedResult</span>&lt;<span class="tp">T</span>&gt;
+    {
+        Items = items, TotalCount = totalCount,
+        Page = opts.Page, PageSize = pageSize
+    };
+}
+
+<span class="kw">public class</span> <span class="tp">PagedResult</span>&lt;<span class="tp">T</span>&gt;
+{
+    <span class="kw">public</span> <span class="tp">List</span>&lt;<span class="tp">T</span>&gt; Items      { <span class="kw">get</span>; <span class="kw">set</span>; } = [];
+    <span class="kw">public int</span>      TotalCount { <span class="kw">get</span>; <span class="kw">set</span>; }
+    <span class="kw">public int</span>      TotalPages =&gt; (<span class="kw">int</span>)<span class="tp">Math</span>.<span class="mt">Ceiling</span>(TotalCount / (<span class="kw">double</span>)PageSize);
+}</code></pre>
+
+                    <div style="display:flex;flex-direction:column;gap:1rem;">
+                        <pre class="code"><code><span class="cm">// Usage — single line per paginated query</span>
+<span class="kw">var</span> result = <span class="kw">await</span> ctx.Products
+    .<span class="mt">WhereActive</span>()
+    .<span class="mt">OrderBy</span>(p =&gt; p.Name)
+    .<span class="mt">Select</span>(p =&gt; <span class="kw">new</span> <span class="tp">ProductListDto</span> {...})
+    .<span class="mt">ToPagingAsync</span>(
+        <span class="kw">new</span> <span class="tp">PagingOptions</span> { Page = <span class="nm">1</span>, PageSize = <span class="nm">20</span> });
+
+result.Items       <span class="cm">// List&lt;ProductListDto&gt;</span>
+result.TotalCount  <span class="cm">// total matching rows</span>
+result.TotalPages  <span class="cm">// for page controls</span></code></pre>
+
+                        <div class="callout">
+                            <strong>Two DB calls</strong>: one <code>COUNT(*)</code> and one <code>SELECT</code> with <code>OFFSET/FETCH</code>.
+                            Always apply <code>.OrderBy()</code> before calling &mdash; SQL Server requires ordering for pagination.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        @* ──────────────────────────────────────────────────────────
+           SLIDE 6 — Global Query Filters: The Problem
+           ────────────────────────────────────────────────────────── *@
+        @if (_slide == 6)
+        {
+            <div class="slide">
+                <div class="slide-meta">
+                    <span class="ch-tag">Chapter 3 · Automatic Behaviors</span>
+                    <span class="file-badge">Data/AppDbContext.cs</span>
+                </div>
+                <h1 class="slide-h">Global Query Filters &mdash; The Problem</h1>
+                <p class="slide-p">Manual <code>HasQueryFilter</code> per entity is error-prone. Forget one entity and you have a data leak or ghost rows in production.</p>
+
+                <div class="slide-grid-2">
+                    <div class="card-s card-s--bad">
+                        <span class="badge-label badge-label--bad">Naive approach</span>
+                        <pre class="code"><code><span class="kw">protected override void</span> <span class="mt">OnModelCreating</span>(<span class="tp">ModelBuilder</span> mb)
+{
+    mb.<span class="mt">Entity</span>&lt;<span class="tp">Product</span>&gt;().<span class="mt">HasQueryFilter</span>(p =&gt;
+        !p.IsDeleted &amp;&amp; p.SiteId == _svc.SiteId);
+
+    mb.<span class="mt">Entity</span>&lt;<span class="tp">Order</span>&gt;().<span class="mt">HasQueryFilter</span>(o =&gt;
+        !o.IsDeleted &amp;&amp; o.SiteId == _svc.SiteId);
+
+    mb.<span class="mt">Entity</span>&lt;<span class="tp">Invoice</span>&gt;().<span class="mt">HasQueryFilter</span>(i =&gt;
+        !i.IsDeleted &amp;&amp; i.SiteId == _svc.SiteId);
+
+    <span class="cm">// 3 months later, new entity added:</span>
+    <span class="cm">// mb.Entity&lt;Quote&gt;().HasQueryFilter(...)</span>
+    <span class="cm">// Developer forgot. Deleted quotes appear.</span>
+    <span class="cm">// All tenants see each other's quotes.</span>
+    <span class="cm">// In. Production.</span>
+}</code></pre>
+                    </div>
+                    <div style="display:flex;flex-direction:column;gap:1rem;">
+                        <div class="card-s card-s--bad">
+                            <span class="badge-label badge-label--bad">Problems</span>
+                            <ul class="pts" style="margin-top:0.5rem;">
+                                <li class="b">Every developer adding an entity must remember to come back here</li>
+                                <li class="b">Nothing in the compiler enforces it &mdash; a forgotten entity silently returns wrong data</li>
+                                <li class="b">Filter logic is copy-pasted for every entity</li>
+                                <li class="b">If the filter logic changes you must update every entity</li>
+                            </ul>
+                        </div>
+                        <div class="callout callout--bad">
+                            This pattern scales linearly with the number of entities.
+                            At 20+ entities it becomes a maintenance hazard.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        @* ──────────────────────────────────────────────────────────
+           SLIDE 7 — Global Query Filters: The Solution (IHaveSiteId)
+           ────────────────────────────────────────────────────────── *@
+        @if (_slide == 7)
+        {
+            <div class="slide">
+                <div class="slide-meta">
+                    <span class="ch-tag">Chapter 3 · Automatic Behaviors</span>
+                    <span class="file-badge">Models/IHaveSiteId.cs &nbsp;·&nbsp; Data/AppDbContext.cs</span>
+                </div>
+                <h1 class="slide-h">Global Query Filters &mdash; Interface as Contract</h1>
+                <p class="slide-p">Implementing the interface <strong>is</strong> the entire setup. <code>AppDbContext</code> handles the rest automatically for all present and future entities.</p>
+
+                <div class="slide-grid-2">
+                    <div style="display:flex;flex-direction:column;gap:1rem;">
+                        <pre class="code"><code><span class="cm">// Step 1: define the interfaces</span>
+<span class="kw">public interface</span> <span class="tp">IHaveSiteId</span>  { <span class="kw">int</span> SiteId { <span class="kw">get</span>; } }
+<span class="kw">public interface</span> <span class="tp">ISoftDelete</span>  { <span class="kw">bool</span> IsDeleted { <span class="kw">get</span>; <span class="kw">set</span>; } }
+
+<span class="cm">// Step 2: implement on each entity — that's IT</span>
+<span class="kw">public class</span> <span class="tp">Product</span> : <span class="tp">IHaveSiteId</span>, <span class="tp">ISoftDelete</span>
+{
+    <span class="kw">public int</span>  SiteId    { <span class="kw">get</span>; <span class="kw">set</span>; } <span class="cm">// filter wires itself</span>
+    <span class="kw">public bool</span> IsDeleted { <span class="kw">get</span>; <span class="kw">set</span>; } <span class="cm">// soft-delete wires itself</span>
+}
+
+<span class="cm">// Future entity — zero AppDbContext changes needed</span>
+<span class="kw">public class</span> <span class="tp">Invoice</span> : <span class="tp">IHaveSiteId</span>, <span class="tp">ISoftDelete</span>
+{
+    <span class="kw">public int</span>  SiteId    { <span class="kw">get</span>; <span class="kw">set</span>; }
+    <span class="kw">public bool</span> IsDeleted { <span class="kw">get</span>; <span class="kw">set</span>; }
+}</code></pre>
+                    </div>
+                    <pre class="code"><code><span class="cm">// Step 3: one loop in OnModelCreating</span>
+<span class="cm">// handles ALL present and future entities</span>
+<span class="kw">foreach</span> (<span class="kw">var</span> type <span class="kw">in</span> mb.Model.<span class="mt">GetEntityTypes</span>()
+    .<span class="mt">Where</span>(t =&gt; !t.<span class="mt">IsOwned</span>())
+    .<span class="mt">Select</span>(t =&gt; t.ClrType))
+{
+    <span class="kw">var</span> filter = <span class="mt">BuildFilter</span>(type);
+    <span class="kw">if</span> (filter <span class="kw">is not null</span>)
+        mb.<span class="mt">Entity</span>(type).<span class="mt">HasQueryFilter</span>(filter);
+}
+
+<span class="cm">// BuildFilter builds the expression tree:</span>
+<span class="cm">// ISoftDelete  → !e.IsDeleted</span>
+<span class="cm">// IHaveSiteId  → siteId == null || e.SiteId == siteId</span>
+<span class="cm">// Both         → !e.IsDeleted &amp;&amp; (siteId == null || ...)</span>
+
+<span class="cm">// IAuditable auto-stamps CreatedAt/UpdatedAt</span>
+<span class="cm">// in SaveChangesAsync — same interface pattern.</span></code></pre>
+                </div>
+                <div class="callout callout--good" style="margin-top:1rem;">
+                    <strong>The compiler enforces correctness.</strong> Forget to implement <code>IHaveSiteId</code> on a new entity
+                    and a code review will catch it &mdash; not a production incident.
+                </div>
+            </div>
+        }
+
+        @* ──────────────────────────────────────────────────────────
+           SLIDE 8 — The Nullable Guard
+           ────────────────────────────────────────────────────────── *@
+        @if (_slide == 8)
+        {
+            <div class="slide">
+                <div class="slide-meta">
+                    <span class="ch-tag">Chapter 3 · Automatic Behaviors</span>
+                    <span class="file-badge">Data/AppDbContext.cs</span>
+                </div>
+                <h1 class="slide-h">The Nullable Guard &mdash; Why <code>== null</code> Matters</h1>
+                <p class="slide-p">EF Core extracts closure parameters <strong>before</strong> evaluating the expression tree. Calling <code>.Value</code> on a null <code>int?</code> throws even inside a <code>!HasValue</code> guard.</p>
+
+                <div class="slide-grid-2">
+                    <div style="display:flex;flex-direction:column;gap:1rem;">
+                        <div class="card-s card-s--bad">
+                            <span class="badge-label badge-label--bad">Throws at startup</span>
+                            <pre class="code"><code><span class="cm">// EF Core pulls parameters out first:</span>
+<span class="cm">// var __p1 = _svc.SiteId.Value; ← THROWS</span>
+<span class="cm">// Then builds: WHERE SiteId == __p1</span>
+p =&gt; !p.IsDeleted
+  &amp;&amp; p.SiteId == _svc.SiteId<span class="hl-bad">!.Value</span>
+
+<span class="cm">// InvalidOperationException:</span>
+<span class="cm">// "Nullable object must have a value"</span>
+<span class="cm">// Happens during migrations, dotnet ef,</span>
+<span class="cm">// or any startup without an HTTP context.</span></code></pre>
+                        </div>
+                        <div class="card-s card-s--good">
+                            <span class="badge-label badge-label--good">Safe pattern</span>
+                            <pre class="code"><code><span class="cm">// == null comparison is safe for EF Core.</span>
+<span class="cm">// null = "no site resolved, skip filter"</span>
+p =&gt; !p.IsDeleted
+  &amp;&amp; (<span class="hl-good">_svc.SiteId == null</span>
+      || p.SiteId == _svc.SiteId)
+
+<span class="cm">// When SiteId is null (migrations etc.):</span>
+<span class="cm">// WHERE NOT IsDeleted  ← no site filter</span>
+
+<span class="cm">// When SiteId = 2:</span>
+<span class="cm">// WHERE NOT IsDeleted AND SiteId = 2</span></code></pre>
+                        </div>
+                    </div>
+                    <div style="display:flex;flex-direction:column;gap:1rem;">
+                        <div class="card-s card-s--info">
+                            <span class="badge-label badge-label--cyan">How parameter extraction works</span>
+                            <ul class="pts" style="margin-top:0.5rem;">
+                                <li>EF Core walks the expression tree looking for constant/closure values</li>
+                                <li>It extracts them as SQL parameters <strong>before</strong> building the SQL query</li>
+                                <li>Any <code>.Value</code> access on a <code>Nullable&lt;T&gt;</code> happens at extraction time &mdash; not inside a conditional</li>
+                                <li>Use <code>== null</code> so EF Core generates an <code>IS NULL</code> check instead of extracting the value</li>
+                            </ul>
+                        </div>
+                        <div class="callout">
+                            This same rule applies anywhere you have a nullable scoped service value in a global query filter.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        @* ──────────────────────────────────────────────────────────
+           SLIDE 9 — Compiled Queries
+           ────────────────────────────────────────────────────────── *@
+        @if (_slide == 9)
+        {
+            <div class="slide">
+                <div class="slide-meta">
+                    <span class="ch-tag">Chapter 4 · Advanced EF Core</span>
+                    <span class="file-badge">Services/ProductService.cs</span>
+                </div>
+                <h1 class="slide-h">Compiled Queries &mdash; Zero Translation Overhead</h1>
+                <p class="slide-p">EF Core compiles the expression tree once at startup and caches it. Each subsequent call skips the translation step entirely.</p>
+
+                <div class="slide-grid-2">
+                    <pre class="code"><code><span class="cm">// static = compiled once for the app lifetime</span>
+<span class="kw">private static readonly</span>
+    <span class="tp">Func</span>&lt;<span class="tp">AppDbContext</span>, <span class="kw">int</span>, <span class="tp">Task</span>&lt;<span class="tp">ProductListDto</span>?&gt;&gt;
+    <span class="hl">_compiledGetById</span> =
+        <span class="tp">EF</span>.<span class="mt">CompileAsyncQuery</span>((<span class="tp">AppDbContext</span> ctx, <span class="kw">int</span> id) =&gt;
+            ctx.Products
+                .<span class="mt">Where</span>(p =&gt; p.Id == id)
+                .<span class="mt">Select</span>(p =&gt; <span class="kw">new</span> <span class="tp">ProductListDto</span>
+                {
+                    Id   = p.Id,
+                    Name = p.Name,
+                    ...
+                })
+                .<span class="mt">FirstOrDefault</span>());
+
+<span class="cm">// DbContext passed per-call →</span>
+<span class="cm">// global filters still applied at runtime</span>
+<span class="kw">public</span> <span class="tp">Task</span>&lt;<span class="tp">ProductListDto</span>?&gt; <span class="mt">GetProductByIdAsync</span>(<span class="kw">int</span> id)
+    =&gt; _compiledGetById(_context, id);</code></pre>
+
+                    <div style="display:flex;flex-direction:column;gap:1rem;">
+                        <div class="card-s">
+                            <span class="badge-label badge-label--info">Normal query (every call)</span>
+                            <ul class="pts" style="margin-top:0.5rem;">
+                                <li>Parse expression tree</li>
+                                <li>Visit each node, build SQL AST</li>
+                                <li>Render SQL string</li>
+                                <li>Execute against DB</li>
+                            </ul>
+                        </div>
+                        <div class="card-s card-s--good">
+                            <span class="badge-label badge-label--good">Compiled query (every call)</span>
+                            <ul class="pts" style="margin-top:0.5rem;">
+                                <li class="g"><s style="color:#64748b;">Parse &amp; translate (skipped)</s></li>
+                                <li class="g">Execute against DB &mdash; directly</li>
+                            </ul>
+                        </div>
+                        <div class="callout callout--warn">
+                            <strong>Trade-off:</strong> query shape is fixed at compile time.
+                            Don&apos;t use compiled queries for dynamic filter combinations &mdash; stick with regular LINQ there.
+                            <br/><br/>
+                            <strong>Global filters still apply</strong> &mdash; the <code>DbContext</code> passed at call time carries the site/soft-delete filter state.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        @* ──────────────────────────────────────────────────────────
+           SLIDE 10 — JSON Columns
+           ────────────────────────────────────────────────────────── *@
+        @if (_slide == 10)
+        {
+            <div class="slide">
+                <div class="slide-meta">
+                    <span class="ch-tag">Chapter 4 · Advanced EF Core</span>
+                    <span class="file-badge">Configurations/ProductConfiguration.cs &nbsp;·&nbsp; Services/ProductService.cs</span>
+                </div>
+                <h1 class="slide-h">JSON Columns &mdash; OPENJSON on the Server</h1>
+                <p class="slide-p"><code>ProductMetadata</code> is stored as a single JSON column. <code>Specifications</code> is a <code>List&lt;Specification&gt;</code> mapped with <code>OwnsMany</code>, enabling fully server-side <code>EXISTS + OPENJSON</code> queries.</p>
+
+                <div class="slide-grid-2">
+                    <div style="display:flex;flex-direction:column;gap:1rem;">
+                        <pre class="code"><code><span class="cm">// ProductConfiguration.cs</span>
+builder.<span class="mt">OwnsOne</span>(p =&gt; p.Metadata, m =&gt;
+{
+    m.<span class="mt">ToJson</span>();   <span class="cm">// entire object stored as JSON</span>
+
+    m.<span class="mt">OwnsMany</span>(x =&gt; x.Specifications, s =&gt;
+    {
+        s.<span class="mt">ToJson</span>(); <span class="cm">// List&lt;Specification&gt; in JSON array</span>
+    });
+    <span class="cm">// Tags = List&lt;string&gt; also in the JSON</span>
+});</code></pre>
+                        <pre class="code"><code><span class="cm">// Query translates fully to server side</span>
+<span class="kw">await</span> ctx.Products
+    .<span class="mt">Where</span>(p =&gt; p.Metadata != <span class="kw">null</span> &amp;&amp;
+        p.Metadata.Specifications
+            .<span class="mt">Any</span>(s =&gt; s.Key == <span class="st">"Color"</span>
+                   &amp;&amp; s.Value == <span class="st">"Red"</span>))
+    .<span class="mt">ToListAsync</span>();</code></pre>
+                    </div>
+                    <div style="display:flex;flex-direction:column;gap:1rem;">
+                        <pre class="code"><code><span class="cm">-- Generated SQL:</span>
+<span class="cm">SELECT [p].[Id], [p].[Name], ...</span>
+<span class="cm">FROM [Products] AS [p]</span>
+<span class="cm">WHERE [p].[Metadata] IS NOT NULL</span>
+<span class="cm">  AND EXISTS (</span>
+<span class="cm">    SELECT 1</span>
+<span class="cm">    FROM OPENJSON([p].[Metadata], '$.Specifications')</span>
+<span class="cm">    WITH ([Key] nvarchar(max), [Value] nvarchar(max))</span>
+<span class="cm">    WHERE [Key] = N'Color'</span>
+<span class="cm">      AND [Value] = N'Red'</span>
+<span class="cm">  )</span></code></pre>
+                        <div class="callout">
+                            <strong>Use <code>ToQueryString()</code></strong> in dev to verify your JSON queries
+                            translate server-side. Hit <em>Show JSON Query SQL</em> on the Products page.
+                        </div>
+                        <div class="callout callout--warn">
+                            Always use <code>.Select()</code> with JSON columns &mdash; the full JSON blob
+                            is one of the columns you don&apos;t want loading unnecessarily.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        @* ──────────────────────────────────────────────────────────
+           SLIDE 11 — AsAsyncEnumerable
+           ────────────────────────────────────────────────────────── *@
+        @if (_slide == 11)
+        {
+            <div class="slide">
+                <div class="slide-meta">
+                    <span class="ch-tag">Chapter 4 · Advanced EF Core</span>
+                    <span class="file-badge">Services/ProductService.cs &nbsp;·&nbsp; Components/Pages/Products.razor</span>
+                </div>
+                <h1 class="slide-h"><code>AsAsyncEnumerable</code> &mdash; Constant Memory Streaming</h1>
+                <p class="slide-p"><code>ToListAsync</code> waits for all rows, then returns. <code>AsAsyncEnumerable</code> yields each row as it arrives &mdash; memory stays constant and the first row appears immediately.</p>
+
+                <div class="slide-grid-2">
+                    <pre class="code"><code><span class="cm">// [EnumeratorCancellation] propagates the token</span>
+<span class="cm">// into .WithCancellation() on the DB cursor</span>
+<span class="kw">public async</span> <span class="tp">IAsyncEnumerable</span>&lt;<span class="tp">ProductListDto</span>&gt; <span class="mt">StreamProductsAsync</span>(
+    [<span class="tp">EnumeratorCancellation</span>] <span class="tp">CancellationToken</span> ct = <span class="kw">default</span>)
+{
+    <span class="kw">await foreach</span> (<span class="kw">var</span> p <span class="kw">in</span> ctx.Products
+        .<span class="mt">OrderBy</span>(p =&gt; p.Id)
+        .<span class="mt">Select</span>(p =&gt; <span class="kw">new</span> <span class="tp">ProductListDto</span> {...})
+        .<span class="mt">AsAsyncEnumerable</span>()
+        .<span class="mt">WithCancellation</span>(ct)) <span class="cm">// cancels DB cursor</span>
+    {
+        <span class="kw">yield return</span> p;     <span class="cm">// caller gets rows immediately</span>
+    }
+}
+
+<span class="cm">// Blazor Server — live UI updates per row</span>
+<span class="kw">await foreach</span> (<span class="kw">var</span> p <span class="kw">in</span> svc.<span class="mt">StreamProductsAsync</span>(cts.Token))
+{
+    _rows.<span class="mt">Add</span>(p);
+    _total += p.Price;
+    <span class="kw">await</span> <span class="mt">InvokeAsync</span>(StateHasChanged); <span class="cm">// live counter</span>
+}</code></pre>
+
+                    <div style="display:flex;flex-direction:column;gap:1rem;">
+                        <table class="bench" style="margin-bottom:0;">
+                            <thead>
+                                <tr><th></th><th>ToListAsync</th><th>AsAsyncEnumerable</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td>First row</td><td class="t-r">After all rows loaded</td><td class="t-g">Immediately</td></tr>
+                                <tr><td>Memory</td><td class="t-r">Full result set</td><td class="t-g">Constant (1 row)</td></tr>
+                                <tr><td>Cancellation</td><td class="t-o">Cancels query</td><td class="t-g">Cancels DB cursor</td></tr>
+                                <tr><td>Best for</td><td>Normal queries</td><td>Exports, ETL, dashboards</td></tr>
+                            </tbody>
+                        </table>
+                        <div class="callout callout--good">
+                            Try the live streaming demo on the <strong>/products</strong> page.
+                            Watch the row counter tick up and hit <em>Cancel</em> to abort mid-stream.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        @* ──────────────────────────────────────────────────────────
+           SLIDE 12 — Bulk Operations
+           ────────────────────────────────────────────────────────── *@
+        @if (_slide == 12)
+        {
+            <div class="slide">
+                <div class="slide-meta">
+                    <span class="ch-tag">Chapter 4 · Advanced EF Core</span>
+                    <span class="file-badge">Services/ProductService.cs</span>
+                </div>
+                <h1 class="slide-h">Bulk Operations &mdash; EF Core 7+</h1>
+                <p class="slide-p"><code>ExecuteUpdateAsync</code> and <code>ExecuteDeleteAsync</code> send a single SQL statement without loading entities. Ideal for batch modifications on large tables.</p>
+
+                <div class="slide-grid-2">
+                    <div style="display:flex;flex-direction:column;gap:1rem;">
+                        <div class="card-s card-s--bad">
+                            <span class="badge-label badge-label--bad">Old way — N round-trips</span>
+                            <pre class="code"><code><span class="cm">// Load 5 000 rows into memory</span>
+<span class="kw">var</span> products = <span class="kw">await</span> ctx.Products
+    .<span class="mt">Where</span>(p =&gt; p.Stock &gt; <span class="nm">0</span>).<span class="mt">ToListAsync</span>();
+
+<span class="cm">// Modify in memory</span>
+<span class="kw">foreach</span> (<span class="kw">var</span> p <span class="kw">in</span> products)
+    p.Price = <span class="kw">new</span> <span class="tp">PriceWithCurrency</span>(p.Price.Amount * <span class="nm">1.1m</span>);
+
+<span class="cm">// 5 000 UPDATE statements</span>
+<span class="kw">await</span> ctx.<span class="mt">SaveChangesAsync</span>();</code></pre>
+                        </div>
+                        <div class="card-s card-s--good">
+                            <span class="badge-label badge-label--good">EF Core 7+ — one statement</span>
+                            <pre class="code"><code><span class="cm">// Zero rows loaded, one SQL UPDATE</span>
+<span class="kw">await</span> ctx.Products
+    .<span class="mt">Where</span>(p =&gt; p.Stock &gt; <span class="nm">0</span>)
+    .<span class="mt">ExecuteUpdateAsync</span>(s =&gt; s
+        .<span class="mt">SetProperty</span>(
+            p =&gt; p.Price.Amount,
+            p =&gt; p.Price.Amount * <span class="nm">1.1m</span>));
+<span class="cm">// UPDATE Products SET Price = Price * 1.1</span>
+<span class="cm">// WHERE Stock &gt; 0 AND IsDeleted = 0 AND SiteId = @@p</span></code></pre>
+                        </div>
+                    </div>
+                    <div style="display:flex;flex-direction:column;gap:1rem;">
+                        <pre class="code"><code><span class="cm">// Hard delete — ExecuteDeleteAsync</span>
+<span class="kw">await</span> ctx.Products
+    .<span class="mt">IgnoreQueryFilters</span>() <span class="cm">// bypass global filters</span>
+    .<span class="mt">Where</span>(p =&gt; p.Stock == <span class="nm">0</span> &amp;&amp; p.IsDeleted)
+    .<span class="mt">ExecuteDeleteAsync</span>();
+<span class="cm">// DELETE FROM Products WHERE Stock = 0</span>
+<span class="cm">// AND IsDeleted = 1</span></code></pre>
+                        <div class="callout callout--bad">
+                            <strong>Warning:</strong> <code>ExecuteUpdateAsync</code> and <code>ExecuteDeleteAsync</code>
+                            bypass change tracking &mdash; they skip <code>ISoftDelete</code> and <code>IAuditable</code> interception
+                            in <code>SaveChangesAsync</code>. Use only when hard deletes and no audit trail is intentional.
+                        </div>
+                        <div class="callout">
+                            Global query filters <strong>still apply</strong> unless you call <code>IgnoreQueryFilters()</code>
+                            &mdash; so site isolation is maintained even for bulk operations.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        @* ──────────────────────────────────────────────────────────
+           SLIDE 13 — EF Core vs Dapper vs ADO.NET
+           ────────────────────────────────────────────────────────── *@
+        @if (_slide == 13)
+        {
+            <div class="slide">
+                <div class="slide-meta">
+                    <span class="ch-tag">Chapter 5 · Comparison</span>
+                </div>
+                <h1 class="slide-h">EF Core vs Dapper vs ADO.NET</h1>
+                <p class="slide-p">Correctly optimized EF Core matches Dapper and ADO.NET for raw throughput. The remaining gap is change tracking overhead &mdash; which you opt into.</p>
+
+                <div style="overflow-x:auto;margin-bottom:1rem;">
+                    <table class="bench">
+                        <thead>
+                            <tr>
+                                <th>Scenario</th>
+                                <th>EF Core (optimized)</th>
+                                <th>Dapper</th>
+                                <th>ADO.NET</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Simple SELECT list (.Select + AsNoTracking)</td>
+                                <td class="t-g">&#8776; same</td>
+                                <td class="t-g">&#8776; same</td>
+                                <td class="t-g">baseline</td>
+                            </tr>
+                            <tr>
+                                <td>Single row by PK (compiled query)</td>
+                                <td class="t-g">&#8776; same</td>
+                                <td class="t-g">&#8776; same</td>
+                                <td class="t-g">baseline</td>
+                            </tr>
+                            <tr>
+                                <td>SELECT with change tracking (default)</td>
+                                <td class="t-o">~10&ndash;30 % slower</td>
+                                <td class="t-m">N/A</td>
+                                <td class="t-m">N/A</td>
+                            </tr>
+                            <tr>
+                                <td>Bulk insert (1 000+ rows)</td>
+                                <td class="t-o">Moderate overhead</td>
+                                <td class="t-o">Slight overhead</td>
+                                <td class="t-g">Fastest</td>
+                            </tr>
+                            <tr>
+                                <td>Bulk UPDATE / DELETE (EF Core 7+)</td>
+                                <td class="t-g">&#8776; same</td>
+                                <td class="t-g">&#8776; same</td>
+                                <td class="t-g">&#8776; same</td>
+                            </tr>
+                            <tr>
+                                <td>Complex JOIN query</td>
+                                <td class="t-g">&#8776; same (with .Select)</td>
+                                <td class="t-g">&#8776; same</td>
+                                <td class="t-g">&#8776; same</td>
+                            </tr>
+                            <tr>
+                                <td>Migrations &amp; schema management</td>
+                                <td class="t-g">Built-in</td>
+                                <td class="t-r">None</td>
+                                <td class="t-r">None</td>
+                            </tr>
+                            <tr>
+                                <td>Type safety &amp; refactoring</td>
+                                <td class="t-g">Full (compile-time)</td>
+                                <td class="t-o">Partial (string SQL)</td>
+                                <td class="t-r">None</td>
+                            </tr>
+                            <tr>
+                                <td>Lines of code for typical CRUD</td>
+                                <td class="t-g">Fewest</td>
+                                <td class="t-o">Moderate</td>
+                                <td class="t-r">Most</td>
+                            </tr>
+                            <tr>
+                                <td>Escape hatch to raw SQL</td>
+                                <td class="t-g">Yes (FromSqlRaw)</td>
+                                <td class="t-g">Yes (native)</td>
+                                <td class="t-g">Yes (native)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="callout callout--good">
+                    <strong>Conclusion:</strong> A fully optimized EF Core query (<code>.Select()</code> + <code>.AsNoTracking()</code> or compiled query)
+                    produces the same SQL as hand-written Dapper and executes at the same speed.
+                    The query execution time is dominated by <strong>network latency + database work</strong>, not the ORM layer.
+                    Choose EF Core for its type safety, migrations, and built-in patterns &mdash; then optimise with the tools shown in this deck.
+                </div>
+            </div>
+        }
+
+        @* ──────────────────────────────────────────────────────────
+           SLIDE 14 — Summary
+           ────────────────────────────────────────────────────────── *@
+        @if (_slide == 14)
+        {
+            <div class="slide">
+                <div class="slide-meta">
+                    <span class="ch-tag">Summary</span>
+                </div>
+                <h1 class="slide-h">Key Takeaways</h1>
+                <div class="summary-grid">
+                    <div class="sum-card">
+                        <h4>Architecture</h4>
+                        <ul class="pts">
+                            <li class="g"><code>DbContext</code> is already Repository + Unit of Work &mdash; don&apos;t wrap it</li>
+                            <li class="g">Extension methods on <code>IQueryable&lt;T&gt;</code> for reusable logic</li>
+                            <li class="g">Interfaces as compile-time contracts for automatic behaviors</li>
+                        </ul>
+                    </div>
+                    <div class="sum-card">
+                        <h4>Query Performance</h4>
+                        <ul class="pts">
+                            <li class="g"><code>.Select()</code> on every list query &mdash; never load unused columns</li>
+                            <li class="g"><code>.AsNoTracking()</code> for read-only queries</li>
+                            <li class="g">Compiled queries for hot-path endpoints (1 000+ rps)</li>
+                            <li class="g"><code>AsSplitQuery</code> to avoid cartesian explosion on multiple collections</li>
+                        </ul>
+                    </div>
+                    <div class="sum-card">
+                        <h4>Automatic Behaviors (just add the interface)</h4>
+                        <ul class="pts">
+                            <li class="g"><code>ISoftDelete</code> &rarr; automatic soft-delete in <code>SaveChangesAsync</code></li>
+                            <li class="g"><code>IAuditable</code> &rarr; automatic <code>CreatedAt/UpdatedAt</code> stamps</li>
+                            <li class="g"><code>IHaveSiteId</code> &rarr; automatic site isolation query filter</li>
+                        </ul>
+                    </div>
+                    <div class="sum-card">
+                        <h4>Advanced Patterns</h4>
+                        <ul class="pts">
+                            <li class="g"><code>AsAsyncEnumerable</code> for exports, ETL, live dashboards</li>
+                            <li class="g"><code>ExecuteUpdateAsync/DeleteAsync</code> for bulk operations</li>
+                            <li class="g">JSON columns with <code>OwnsMany</code> for server-side OPENJSON queries</li>
+                            <li class="g">Optimized EF Core &asymp; Dapper &asymp; ADO.NET for raw throughput</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="callout" style="margin-top:1rem;text-align:center;">
+                    All patterns demonstrated are running live at <strong>/products</strong>.
+                    Source: <code>Services/ProductService.cs</code> &nbsp;&middot;&nbsp; <code>Extensions/QueryExtensions.cs</code> &nbsp;&middot;&nbsp; <code>Data/AppDbContext.cs</code>
+                </div>
+            </div>
+        }
+
+    </main>
+
+    <div class="pres-progress">
+        <div class="pres-progress-fill" style="width: @((_slide + 1.0) / TotalSlides * 100.0)%"></div>
+    </div>
+
+    <footer class="pres-footer">
+        @for (int i = 0; i < TotalSlides; i++)
+        {
+            var idx = i;
+            <button class="pres-dot @(idx == _slide ? "pres-dot--active" : "")"
+                    @onclick="() => GoTo(idx)"
+                    title="Slide @(idx + 1)"></button>
+        }
+    </footer>
+
+</div>
+
+@code {
+    private int _slide = 0;
+    private const int TotalSlides = 15;
+    private DotNetObjectReference<Presentation>? _ref;
+    private IJSObjectReference? _module;
+
+    private static readonly string[] _chapters =
+    [
+        "",
+        "Chapter 1 · Foundations",
+        "Chapter 1 · Foundations",
+        "Chapter 2 · Data Access Patterns",
+        "Chapter 2 · Data Access Patterns",
+        "Chapter 2 · Data Access Patterns",
+        "Chapter 3 · Automatic Behaviors",
+        "Chapter 3 · Automatic Behaviors",
+        "Chapter 3 · Automatic Behaviors",
+        "Chapter 4 · Advanced EF Core",
+        "Chapter 4 · Advanced EF Core",
+        "Chapter 4 · Advanced EF Core",
+        "Chapter 4 · Advanced EF Core",
+        "Chapter 5 · Comparison",
+        "Summary",
+    ];
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        _ref = DotNetObjectReference.Create(this);
+        // JS module isolation: import() loads the file on-demand at the right moment,
+        // avoiding the timing issue where HeadContent scripts aren't yet executed.
+        _module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/presentation.js");
+        await _module.InvokeVoidAsync("init", _ref);
+    }
+
+    [JSInvokable]
+    public void HandleKey(string dir)
+    {
+        if (dir == "next") Next();
+        else Prev();
+        StateHasChanged();
+    }
+
+    private void Next() { if (_slide < TotalSlides - 1) _slide++; }
+    private void Prev() { if (_slide > 0) _slide--; }
+    private void GoTo(int idx) { _slide = idx; }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            if (_module != null)
+            {
+                await _module.InvokeVoidAsync("dispose");
+                await _module.DisposeAsync();
+            }
+        }
+        catch { }
+        _ref?.Dispose();
+    }
+}

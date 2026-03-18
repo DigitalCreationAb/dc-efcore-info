@@ -1,0 +1,114 @@
+/* ── Hero ──────────────────────────────────────────────────── */
+.dc-hero {
+    background: linear-gradient(160deg, #0d0d18 0%, #09090f 100%);
+    border-bottom: 1px solid #1e1e30;
+    padding: 4.5rem 1.5rem 3.5rem;
+}
+
+.dc-hero-inner {
+    max-width: 680px;
+    margin: 0 auto;
+    text-align: center;
+}
+
+.dc-hero-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #64748b;
+    margin-bottom: 1.5rem;
+}
+
+.dc-hero-badge {
+    background: #E95C2D;
+    color: #fff;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.68rem;
+    font-weight: 900;
+    letter-spacing: 0.12em;
+}
+
+.dc-hero-title {
+    font-size: clamp(2rem, 5vw, 3.25rem);
+    font-weight: 900;
+    letter-spacing: -0.03em;
+    color: #f1f5f9;
+    margin: 0 0 0.75rem;
+    line-height: 1.1;
+}
+
+.dc-hero-sub {
+    font-size: 1.05rem;
+    color: #64748b;
+    margin: 0 0 2rem;
+    line-height: 1.65;
+}
+
+.dc-hero-actions {
+    display: flex;
+    justify-content: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+/* ── Feature cards ─────────────────────────────────────────── */
+.dc-tag {
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    padding: 2px 8px;
+    border-radius: 4px;
+}
+
+.dc-tag--green  { color: #10b981; background: #10b98120; }
+.dc-tag--accent { color: #E95C2D; background: #E95C2D20; }
+
+.dc-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+.dc-list li {
+    font-size: 0.88rem;
+    color: #94a3b8;
+    padding-left: 1rem;
+    position: relative;
+    line-height: 1.5;
+}
+
+.dc-list li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0.6em;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: #E95C2D;
+    flex-shrink: 0;
+}
+
+/* ── Notice callout ────────────────────────────────────────── */
+.dc-notice {
+    border-left: 3px solid #f59e0b;
+    padding: 0.85rem 1.1rem;
+    background: #f59e0b08;
+    border: 1px solid #f59e0b25;
+    border-left: 3px solid #f59e0b;
+    border-radius: 0 8px 8px 0;
+    font-size: 0.9rem;
+    color: #94a3b8;
+    line-height: 1.6;
+}
+
+.dc-notice strong { color: #f1f5f9; }

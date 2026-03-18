@@ -30,9 +30,6 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
             .HasForeignKey(o => o.SiteId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        // Global query filter
-        builder.HasQueryFilter(o => !o.IsDeleted);
-
         builder.HasIndex(o => o.OrderNumber).IsUnique();
         builder.HasIndex(o => o.SiteId);
     }
