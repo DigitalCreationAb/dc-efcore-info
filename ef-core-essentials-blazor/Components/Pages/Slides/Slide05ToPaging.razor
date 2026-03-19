@@ -1,0 +1,55 @@
+<div class="slide">
+    <div class="slide-meta">
+        <span class="ch-tag">Chapter 2 · Data Access Patterns</span>
+        <span class="file-badge">Extensions/QueryExtensions.cs</span>
+    </div>
+    <h1 class="slide-h">Reusable Pagination with <code>ToPagingAsync&lt;T&gt;()</code></h1>
+    <p class="slide-p">One extension method handles every paginated query in the codebase. Apply ordering and <code>.Select()</code> first, then call it.</p>
+
+    <div class="slide-grid-2">
+        <pre class="code"><code><span class="cm">// QueryExtensions.cs — defined once, used everywhere</span>
+<span class="kw">public static async</span> <span class="tp">Task</span>&lt;<span class="tp">PagedResult</span>&lt;<span class="tp">T</span>&gt;&gt; <span class="mt">ToPagingAsync</span>&lt;<span class="tp">T</span>&gt;(
+    <span class="kw">this</span> <span class="tp">IQueryable</span>&lt;<span class="tp">T</span>&gt; query,
+    <span class="tp">PagingOptions</span> opts,
+    <span class="tp">CancellationToken</span> ct = <span class="kw">default</span>)
+{
+    <span class="kw">var</span> pageSize   = <span class="tp">Math</span>.<span class="mt">Min</span>(opts.PageSize, <span class="tp">PagingOptions</span>.MaxPageSize);
+    <span class="kw">var</span> totalCount = <span class="kw">await</span> query.<span class="mt">CountAsync</span>(ct);   <span class="cm">// SELECT COUNT(*)</span>
+    <span class="kw">var</span> items      = <span class="kw">await</span> query
+        .<span class="mt">Skip</span>((opts.Page - <span class="nm">1</span>) * pageSize)
+        .<span class="mt">Take</span>(pageSize)
+        .<span class="mt">ToListAsync</span>(ct);                           <span class="cm">// SELECT with OFFSET</span>
+    <span class="kw">return new</span> <span class="tp">PagedResult</span>&lt;<span class="tp">T</span>&gt;
+    {
+        Items = items, TotalCount = totalCount,
+        Page = opts.Page, PageSize = pageSize
+    };
+}
+
+<span class="kw">public class</span> <span class="tp">PagedResult</span>&lt;<span class="tp">T</span>&gt;
+{
+    <span class="kw">public</span> <span class="tp">List</span>&lt;<span class="tp">T</span>&gt; Items      { <span class="kw">get</span>; <span class="kw">set</span>; } = [];
+    <span class="kw">public int</span>      TotalCount { <span class="kw">get</span>; <span class="kw">set</span>; }
+    <span class="kw">public int</span>      TotalPages =&gt; (<span class="kw">int</span>)<span class="tp">Math</span>.<span class="mt">Ceiling</span>(TotalCount / (<span class="kw">double</span>)PageSize);
+}</code></pre>
+
+        <div style="display:flex;flex-direction:column;gap:1rem;">
+            <pre class="code"><code><span class="cm">// Usage — single line per paginated query</span>
+<span class="kw">var</span> result = <span class="kw">await</span> ctx.Products
+    .<span class="mt">WhereActive</span>()
+    .<span class="mt">OrderBy</span>(p =&gt; p.Name)
+    .<span class="mt">Select</span>(p =&gt; <span class="kw">new</span> <span class="tp">ProductListDto</span> {...})
+    .<span class="mt">ToPagingAsync</span>(
+        <span class="kw">new</span> <span class="tp">PagingOptions</span> { Page = <span class="nm">1</span>, PageSize = <span class="nm">20</span> });
+
+result.Items       <span class="cm">// List&lt;ProductListDto&gt;</span>
+result.TotalCount  <span class="cm">// total matching rows</span>
+result.TotalPages  <span class="cm">// for page controls</span></code></pre>
+
+            <div class="callout">
+                <strong>Two DB calls</strong>: one <code>COUNT(*)</code> and one <code>SELECT</code> with <code>OFFSET/FETCH</code>.
+                Always apply <code>.OrderBy()</code> before calling &mdash; SQL Server requires ordering for pagination.
+            </div>
+        </div>
+    </div>
+</div>

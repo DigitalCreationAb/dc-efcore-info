@@ -1,0 +1,46 @@
+<div class="slide">
+    <div class="slide-meta">
+        <span class="ch-tag">Summary</span>
+    </div>
+    <h1 class="slide-h">Key Takeaways</h1>
+    <div class="summary-grid">
+        <div class="sum-card">
+            <h4>Architecture</h4>
+            <ul class="pts">
+                <li class="g"><code>DbContext</code> is already Repository + Unit of Work &mdash; don&apos;t wrap it</li>
+                <li class="g">Extension methods on <code>IQueryable&lt;T&gt;</code> for reusable logic</li>
+                <li class="g">Interfaces as compile-time contracts for automatic behaviors</li>
+            </ul>
+        </div>
+        <div class="sum-card">
+            <h4>Query Performance</h4>
+            <ul class="pts">
+                <li class="g"><code>.Select()</code> on every list query &mdash; never load unused columns</li>
+                <li class="g"><code>.AsNoTracking()</code> for read-only queries</li>
+                <li class="g">Compiled queries for hot-path endpoints (1 000+ rps)</li>
+                <li class="g"><code>AsSplitQuery</code> to avoid cartesian explosion on multiple collections</li>
+            </ul>
+        </div>
+        <div class="sum-card">
+            <h4>Automatic Behaviors (just add the interface)</h4>
+            <ul class="pts">
+                <li class="g"><code>ISoftDelete</code> &rarr; automatic soft-delete in <code>SaveChangesAsync</code></li>
+                <li class="g"><code>IAuditable</code> &rarr; automatic <code>CreatedAt/UpdatedAt</code> stamps</li>
+                <li class="g"><code>IHaveSiteId</code> &rarr; automatic site isolation query filter</li>
+            </ul>
+        </div>
+        <div class="sum-card">
+            <h4>Advanced Patterns</h4>
+            <ul class="pts">
+                <li class="g"><code>AsAsyncEnumerable</code> for exports, ETL, live dashboards</li>
+                <li class="g"><code>ExecuteUpdateAsync/DeleteAsync</code> for bulk operations</li>
+                <li class="g">JSON columns with <code>OwnsMany</code> for server-side OPENJSON queries</li>
+                <li class="g">Optimized EF Core &asymp; Dapper &asymp; ADO.NET for raw throughput</li>
+            </ul>
+        </div>
+    </div>
+    <div class="callout" style="margin-top:1rem;text-align:center;">
+        All patterns demonstrated are running live at <strong>/products</strong>.
+        Source: <code>Services/ProductService.cs</code> &nbsp;&middot;&nbsp; <code>Extensions/QueryExtensions.cs</code> &nbsp;&middot;&nbsp; <code>Data/AppDbContext.cs</code>
+    </div>
+</div>

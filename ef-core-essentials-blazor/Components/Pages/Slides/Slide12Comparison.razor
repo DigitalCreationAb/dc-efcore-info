@@ -1,0 +1,88 @@
+<div class="slide">
+    <div class="slide-meta">
+        <span class="ch-tag">Chapter 5 · Comparison</span>
+    </div>
+    <h1 class="slide-h">EF Core vs Dapper vs ADO.NET</h1>
+    <p class="slide-p">Correctly optimized EF Core matches Dapper and ADO.NET for raw throughput. The remaining gap is change tracking overhead &mdash; which you opt into.</p>
+
+    <div style="overflow-x:auto;margin-bottom:1rem;">
+        <table class="bench">
+            <thead>
+                <tr>
+                    <th>Scenario</th>
+                    <th>EF Core (optimized)</th>
+                    <th>Dapper</th>
+                    <th>ADO.NET</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Simple SELECT list (.Select + AsNoTracking)</td>
+                    <td class="t-g">&#8776; same</td>
+                    <td class="t-g">&#8776; same</td>
+                    <td class="t-g">baseline</td>
+                </tr>
+                <tr>
+                    <td>Single row by PK (compiled query)</td>
+                    <td class="t-g">&#8776; same</td>
+                    <td class="t-g">&#8776; same</td>
+                    <td class="t-g">baseline</td>
+                </tr>
+                <tr>
+                    <td>SELECT with change tracking (default)</td>
+                    <td class="t-o">~10&ndash;30 % slower</td>
+                    <td class="t-m">N/A</td>
+                    <td class="t-m">N/A</td>
+                </tr>
+                <tr>
+                    <td>Bulk insert (1 000+ rows)</td>
+                    <td class="t-o">Moderate overhead</td>
+                    <td class="t-o">Slight overhead</td>
+                    <td class="t-g">Fastest</td>
+                </tr>
+                <tr>
+                    <td>Bulk UPDATE / DELETE (EF Core 7+)</td>
+                    <td class="t-g">&#8776; same</td>
+                    <td class="t-g">&#8776; same</td>
+                    <td class="t-g">&#8776; same</td>
+                </tr>
+                <tr>
+                    <td>Complex JOIN query</td>
+                    <td class="t-g">&#8776; same (with .Select)</td>
+                    <td class="t-g">&#8776; same</td>
+                    <td class="t-g">&#8776; same</td>
+                </tr>
+                <tr>
+                    <td>Migrations &amp; schema management</td>
+                    <td class="t-g">Built-in</td>
+                    <td class="t-r">None</td>
+                    <td class="t-r">None</td>
+                </tr>
+                <tr>
+                    <td>Type safety &amp; refactoring</td>
+                    <td class="t-g">Full (compile-time)</td>
+                    <td class="t-o">Partial (string SQL)</td>
+                    <td class="t-r">None</td>
+                </tr>
+                <tr>
+                    <td>Lines of code for typical CRUD</td>
+                    <td class="t-g">Fewest</td>
+                    <td class="t-o">Moderate</td>
+                    <td class="t-r">Most</td>
+                </tr>
+                <tr>
+                    <td>Escape hatch to raw SQL</td>
+                    <td class="t-g">Yes (FromSqlRaw)</td>
+                    <td class="t-g">Yes (native)</td>
+                    <td class="t-g">Yes (native)</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    <div class="callout callout--good">
+        <strong>Conclusion:</strong> A fully optimized EF Core query (<code>.Select()</code> + <code>.AsNoTracking()</code> or compiled query)
+        produces the same SQL as hand-written Dapper and executes at the same speed.
+        The query execution time is dominated by <strong>network latency + database work</strong>, not the ORM layer.
+        Choose EF Core for its type safety, migrations, and built-in patterns &mdash; then optimise with the tools shown in this deck.
+    </div>
+</div>

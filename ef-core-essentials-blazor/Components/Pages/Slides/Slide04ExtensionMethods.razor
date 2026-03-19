@@ -1,0 +1,50 @@
+<div class="slide">
+    <div class="slide-meta">
+        <span class="ch-tag">Chapter 2 · Data Access Patterns</span>
+        <span class="file-badge">Extensions/QueryExtensions.cs</span>
+    </div>
+    <h1 class="slide-h">Extension Methods Over Repository</h1>
+    <p class="slide-p">Reusable query logic without losing <code>IQueryable</code> composability. The query still compiles to a single SQL statement.</p>
+
+    <div class="slide-grid-2">
+        <pre class="code"><code><span class="cm">// Extensions/QueryExtensions.cs</span>
+
+<span class="kw">public static</span> <span class="tp">IQueryable</span>&lt;<span class="tp">Product</span>&gt; <span class="mt">WhereActive</span>(
+    <span class="kw">this</span> <span class="tp">IQueryable</span>&lt;<span class="tp">Product</span>&gt; q)
+    =&gt; q.<span class="mt">Where</span>(p =&gt; p.Stock &gt; <span class="nm">0</span> &amp;&amp; !p.IsDeleted);
+
+<span class="kw">public static</span> <span class="tp">IQueryable</span>&lt;<span class="tp">Product</span>&gt; <span class="mt">ForCurrentSite</span>(
+    <span class="kw">this</span> <span class="tp">IQueryable</span>&lt;<span class="tp">Product</span>&gt; q, <span class="kw">int</span>? siteId)
+    =&gt; siteId.<span class="mt">HasValue</span>
+        ? q.<span class="mt">Where</span>(p =&gt; p.SiteId == siteId.<span class="mt">Value</span>)
+        : q;
+
+<span class="kw">public static</span> <span class="tp">IQueryable</span>&lt;<span class="tp">Product</span>&gt; <span class="mt">SearchByName</span>(
+    <span class="kw">this</span> <span class="tp">IQueryable</span>&lt;<span class="tp">Product</span>&gt; q, <span class="kw">string</span>? term)
+    =&gt; <span class="kw">string</span>.<span class="mt">IsNullOrWhiteSpace</span>(term)
+        ? q
+        : q.<span class="mt">Where</span>(p =&gt; p.Name.<span class="mt">Contains</span>(term));</code></pre>
+
+        <div style="display:flex;flex-direction:column;gap:1rem;">
+            <pre class="code"><code><span class="cm">// Still fully composable — one SQL query</span>
+<span class="kw">var</span> result = <span class="kw">await</span> ctx.Products
+    .<span class="mt">WhereActive</span>()
+    .<span class="mt">ForCurrentSite</span>(siteId)
+    .<span class="mt">SearchByName</span>(searchTerm)
+    .<span class="mt">Where</span>(p =&gt; p.Price.Amount &gt; <span class="nm">500</span>)
+    .<span class="mt">OrderBy</span>(p =&gt; p.Name)
+    .<span class="mt">Select</span>(p =&gt; <span class="kw">new</span> <span class="tp">ProductListDto</span> {...})
+    .<span class="mt">ToPagingAsync</span>(opts);</code></pre>
+
+            <div class="card-s card-s--accent">
+                <span class="badge-label badge-label--info">Why extension methods win</span>
+                <ul class="pts" style="margin-top:0.5rem;">
+                    <li>Returns <code>IQueryable</code> &mdash; caller can keep adding conditions</li>
+                    <li>No interface to define, no class to register</li>
+                    <li>Works for any query, not bound to a Repository class</li>
+                    <li>EF Core folds everything into <strong>one SQL query</strong></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>

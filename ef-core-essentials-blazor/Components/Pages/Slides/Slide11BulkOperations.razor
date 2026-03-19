@@ -1,0 +1,56 @@
+<div class="slide">
+    <div class="slide-meta">
+        <span class="ch-tag">Chapter 4 · Advanced EF Core</span>
+        <span class="file-badge">Services/ProductService.cs</span>
+    </div>
+    <h1 class="slide-h">Bulk Operations &mdash; EF Core 7+</h1>
+    <p class="slide-p"><code>ExecuteUpdateAsync</code> and <code>ExecuteDeleteAsync</code> send a single SQL statement without loading entities. Ideal for batch modifications on large tables.</p>
+
+    <div class="slide-grid-2">
+        <div style="display:flex;flex-direction:column;gap:1rem;">
+            <div class="card-s card-s--bad">
+                <span class="badge-label badge-label--bad">Old way — N round-trips</span>
+                <pre class="code"><code><span class="cm">// Load 5 000 rows into memory</span>
+<span class="kw">var</span> products = <span class="kw">await</span> ctx.Products
+    .<span class="mt">Where</span>(p =&gt; p.Stock &gt; <span class="nm">0</span>).<span class="mt">ToListAsync</span>();
+
+<span class="cm">// Modify in memory</span>
+<span class="kw">foreach</span> (<span class="kw">var</span> p <span class="kw">in</span> products)
+    p.Price = <span class="kw">new</span> <span class="tp">PriceWithCurrency</span>(p.Price.Amount * <span class="nm">1.1m</span>);
+
+<span class="cm">// 5 000 UPDATE statements</span>
+<span class="kw">await</span> ctx.<span class="mt">SaveChangesAsync</span>();</code></pre>
+            </div>
+            <div class="card-s card-s--good">
+                <span class="badge-label badge-label--good">EF Core 7+ — one statement</span>
+                <pre class="code"><code><span class="cm">// Zero rows loaded, one SQL UPDATE</span>
+<span class="kw">await</span> ctx.Products
+    .<span class="mt">Where</span>(p =&gt; p.Stock &gt; <span class="nm">0</span>)
+    .<span class="mt">ExecuteUpdateAsync</span>(s =&gt; s
+        .<span class="mt">SetProperty</span>(
+            p =&gt; p.Price.Amount,
+            p =&gt; p.Price.Amount * <span class="nm">1.1m</span>));
+<span class="cm">// UPDATE Products SET Price = Price * 1.1</span>
+<span class="cm">// WHERE Stock &gt; 0 AND IsDeleted = 0 AND SiteId = @@p</span></code></pre>
+            </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:1rem;">
+            <pre class="code"><code><span class="cm">// Hard delete — ExecuteDeleteAsync</span>
+<span class="kw">await</span> ctx.Products
+    .<span class="mt">IgnoreQueryFilters</span>() <span class="cm">// bypass global filters</span>
+    .<span class="mt">Where</span>(p =&gt; p.Stock == <span class="nm">0</span> &amp;&amp; p.IsDeleted)
+    .<span class="mt">ExecuteDeleteAsync</span>();
+<span class="cm">// DELETE FROM Products WHERE Stock = 0</span>
+<span class="cm">// AND IsDeleted = 1</span></code></pre>
+            <div class="callout callout--bad">
+                <strong>Warning:</strong> <code>ExecuteUpdateAsync</code> and <code>ExecuteDeleteAsync</code>
+                bypass change tracking &mdash; they skip <code>ISoftDelete</code> and <code>IAuditable</code> interception
+                in <code>SaveChangesAsync</code>. Use only when hard deletes and no audit trail is intentional.
+            </div>
+            <div class="callout">
+                Global query filters <strong>still apply</strong> unless you call <code>IgnoreQueryFilters()</code>
+                &mdash; so site isolation is maintained even for bulk operations.
+            </div>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,68 @@
+<div class="slide">
+    <div class="slide-meta">
+        <span class="ch-tag">Chapter 3 · Automatic Behaviors</span>
+        <span class="file-badge">Data/AppDbContext.cs</span>
+    </div>
+    <h1 class="slide-h">Global Query Filters</h1>
+    <p class="slide-p">
+        Automatically append <code>WHERE IsDeleted = 0 AND SiteId = @@p</code> to every query &mdash;
+        no manual <code>WHERE</code> in service code, ever. Two ways to set it up.
+    </p>
+
+    <div class="slide-grid-2">
+
+        <div style="display:flex;flex-direction:column;gap:1rem;">
+            <div class="card-s">
+                <span class="badge-label badge-label--info">Direct &mdash; simple, easy to follow</span>
+                <pre class="code"><code><span class="cm">// OnModelCreating — register per entity</span>
+modelBuilder.<span class="mt">Entity</span>&lt;<span class="tp">Product</span>&gt;()
+    .<span class="mt">HasQueryFilter</span>(p =&gt;
+        !p.IsDeleted
+        &amp;&amp; p.SiteId == _svc.SiteId);
+
+<span class="cm">// Every query now becomes:</span>
+<span class="cm">// SELECT ... FROM Products</span>
+<span class="cm">// WHERE IsDeleted = 0 AND SiteId = @@p</span>
+
+<span class="cm">// Opt-out when needed:</span>
+ctx.Products
+    .<span class="mt">IgnoreQueryFilters</span>()
+    .<span class="mt">ToListAsync</span>();</code></pre>
+            </div>
+            <div class="callout callout--warn">
+                New entity? You must come back here and register another filter.
+                Nothing reminds you &mdash; a missed entity silently leaks data or returns ghost rows.
+            </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:1rem;">
+            <div class="card-s card-s--good">
+                <span class="badge-label badge-label--good">Interface-driven &mdash; automatic &amp; fail-safe</span>
+                <pre class="code"><code><span class="cm">// Step 1: marker interfaces</span>
+<span class="kw">public interface</span> <span class="tp">ISoftDelete</span>  { <span class="kw">bool</span> IsDeleted { <span class="kw">get</span>; <span class="kw">set</span>; } }
+<span class="kw">public interface</span> <span class="tp">IHaveSiteId</span> { <span class="kw">int</span>  SiteId    { <span class="kw">get</span>; } }
+
+<span class="cm">// Step 2: implement on entity — that IS the setup</span>
+<span class="kw">public class</span> <span class="tp">Invoice</span> : <span class="tp">ISoftDelete</span>, <span class="tp">IHaveSiteId</span> { ... }
+
+<span class="cm">// Step 3: one loop in OnModelCreating</span>
+<span class="cm">// handles ALL present and future entities</span>
+<span class="kw">foreach</span> (<span class="kw">var</span> type <span class="kw">in</span> mb.Model.<span class="mt">GetEntityTypes</span>()
+    .<span class="mt">Where</span>(t =&gt; !t.<span class="mt">IsOwned</span>())
+    .<span class="mt">Select</span>(t =&gt; t.ClrType))
+{
+    <span class="kw">var</span> filter = <span class="mt">BuildFilter</span>(type);
+    <span class="kw">if</span> (filter <span class="kw">is not null</span>)
+        mb.<span class="mt">Entity</span>(type).<span class="mt">HasQueryFilter</span>(filter);
+}
+<span class="cm">// New entity? Just implement the interface.</span>
+<span class="cm">// AppDbContext never needs touching.</span></code></pre>
+            </div>
+            <div class="callout callout--good">
+                <strong>Compiler-enforced.</strong> Forget to implement <code>IHaveSiteId</code> on a new entity
+                and a code review will catch it &mdash; not a production incident.
+            </div>
+        </div>
+
+    </div>
+</div>

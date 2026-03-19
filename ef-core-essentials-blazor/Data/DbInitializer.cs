@@ -185,7 +185,7 @@ public static class DbInitializer
         context.SaveChanges();
 
         // Bulk products so AsAsyncEnumerable streaming demo has enough rows to show
-        var bulkProducts = Enumerable.Range(1, 1500).Select(i => new Product
+        var bulkProducts = Enumerable.Range(1, 5500).Select(i => new Product
         {
             Name        = $"Bulk Product {i:D3}",
             Description = "Auto-generated for streaming demo",

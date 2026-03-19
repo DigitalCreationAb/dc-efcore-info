@@ -1,0 +1,51 @@
+<div class="slide">
+    <div class="slide-meta">
+        <span class="ch-tag">Chapter 4 · Advanced EF Core</span>
+        <span class="file-badge">Services/ProductService.cs &nbsp;·&nbsp; Components/Pages/Products.razor</span>
+    </div>
+    <h1 class="slide-h"><code>AsAsyncEnumerable</code> &mdash; Constant Memory Streaming</h1>
+    <p class="slide-p"><code>ToListAsync</code> waits for all rows, then returns. <code>AsAsyncEnumerable</code> yields each row as it arrives &mdash; memory stays constant and the first row appears immediately.</p>
+
+    <div class="slide-grid-2">
+        <pre class="code"><code><span class="cm">// [EnumeratorCancellation] propagates the token</span>
+<span class="cm">// into .WithCancellation() on the DB cursor</span>
+<span class="kw">public async</span> <span class="tp">IAsyncEnumerable</span>&lt;<span class="tp">ProductListDto</span>&gt; <span class="mt">StreamProductsAsync</span>(
+    [<span class="tp">EnumeratorCancellation</span>] <span class="tp">CancellationToken</span> ct = <span class="kw">default</span>)
+{
+    <span class="kw">await foreach</span> (<span class="kw">var</span> p <span class="kw">in</span> ctx.Products
+        .<span class="mt">OrderBy</span>(p =&gt; p.Id)
+        .<span class="mt">Select</span>(p =&gt; <span class="kw">new</span> <span class="tp">ProductListDto</span> {...})
+        .<span class="mt">AsAsyncEnumerable</span>()
+        .<span class="mt">WithCancellation</span>(ct)) <span class="cm">// cancels DB cursor</span>
+    {
+        <span class="kw">yield return</span> p;     <span class="cm">// caller gets rows immediately</span>
+    }
+}
+
+<span class="cm">// Blazor Server — live UI updates per row</span>
+<span class="kw">await foreach</span> (<span class="kw">var</span> p <span class="kw">in</span> svc.<span class="mt">StreamProductsAsync</span>(cts.Token))
+{
+    _rows.<span class="mt">Add</span>(p);
+    _total += p.Price;
+    <span class="kw">await</span> <span class="mt">InvokeAsync</span>(StateHasChanged); <span class="cm">// live counter</span>
+}</code></pre>
+
+        <div style="display:flex;flex-direction:column;gap:1rem;">
+            <table class="bench" style="margin-bottom:0;">
+                <thead>
+                    <tr><th></th><th>ToListAsync</th><th>AsAsyncEnumerable</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>First row</td><td class="t-r">After all rows loaded</td><td class="t-g">Immediately</td></tr>
+                    <tr><td>Memory</td><td class="t-r">Full result set</td><td class="t-g">Constant (1 row)</td></tr>
+                    <tr><td>Cancellation</td><td class="t-o">Cancels query</td><td class="t-g">Cancels DB cursor</td></tr>
+                    <tr><td>Best for</td><td>Normal queries</td><td>Exports, ETL, dashboards</td></tr>
+                </tbody>
+            </table>
+            <div class="callout callout--good">
+                Try the live streaming demo on the <strong>/products</strong> page.
+                Watch the row counter tick up and hit <em>Cancel</em> to abort mid-stream.
+            </div>
+        </div>
+    </div>
+</div>

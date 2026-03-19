@@ -1,0 +1,55 @@
+<div class="slide">
+    <div class="slide-meta">
+        <span class="ch-tag">Chapter 4 · Advanced EF Core</span>
+        <span class="file-badge">Services/ProductService.cs</span>
+    </div>
+    <h1 class="slide-h">Compiled Queries &mdash; Zero Translation Overhead</h1>
+    <p class="slide-p">EF Core compiles the expression tree once at startup and caches it. Each subsequent call skips the translation step entirely.</p>
+
+    <div class="slide-grid-2">
+        <pre class="code"><code><span class="cm">// static = compiled once for the app lifetime</span>
+<span class="kw">private static readonly</span>
+    <span class="tp">Func</span>&lt;<span class="tp">AppDbContext</span>, <span class="kw">int</span>, <span class="tp">Task</span>&lt;<span class="tp">ProductListDto</span>?&gt;&gt;
+    <span class="hl">_compiledGetById</span> =
+        <span class="tp">EF</span>.<span class="mt">CompileAsyncQuery</span>((<span class="tp">AppDbContext</span> ctx, <span class="kw">int</span> id) =&gt;
+            ctx.Products
+                .<span class="mt">Where</span>(p =&gt; p.Id == id)
+                .<span class="mt">Select</span>(p =&gt; <span class="kw">new</span> <span class="tp">ProductListDto</span>
+                {
+                    Id   = p.Id,
+                    Name = p.Name,
+                    ...
+                })
+                .<span class="mt">FirstOrDefault</span>());
+
+<span class="cm">// DbContext passed per-call ?</span>
+<span class="cm">// global filters still applied at runtime</span>
+<span class="kw">public</span> <span class="tp">Task</span>&lt;<span class="tp">ProductListDto</span>?&gt; <span class="mt">GetProductByIdAsync</span>(<span class="kw">int</span> id)
+    =&gt; _compiledGetById(_context, id);</code></pre>
+
+        <div style="display:flex;flex-direction:column;gap:1rem;">
+            <div class="card-s">
+                <span class="badge-label badge-label--info">Normal query (every call)</span>
+                <ul class="pts" style="margin-top:0.5rem;">
+                    <li>Parse expression tree</li>
+                    <li>Visit each node, build SQL AST</li>
+                    <li>Render SQL string</li>
+                    <li>Execute against DB</li>
+                </ul>
+            </div>
+            <div class="card-s card-s--good">
+                <span class="badge-label badge-label--good">Compiled query (every call)</span>
+                <ul class="pts" style="margin-top:0.5rem;">
+                    <li class="g"><s style="color:#64748b;">Parse &amp; translate (skipped)</s></li>
+                    <li class="g">Execute against DB &mdash; directly</li>
+                </ul>
+            </div>
+            <div class="callout callout--warn">
+                <strong>Trade-off:</strong> query shape is fixed at compile time.
+                Don&apos;t use compiled queries for dynamic filter combinations &mdash; stick with regular LINQ there.
+                <br/><br/>
+                <strong>Global filters still apply</strong> &mdash; the <code>DbContext</code> passed at call time carries the site/soft-delete filter state.
+            </div>
+        </div>
+    </div>
+</div>

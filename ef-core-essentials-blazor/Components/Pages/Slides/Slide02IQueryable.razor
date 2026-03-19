@@ -1,0 +1,50 @@
+<div class="slide">
+    <div class="slide-meta">
+        <span class="ch-tag">Chapter 1 · Foundations</span>
+        <span class="file-badge">Services/ProductService.cs</span>
+    </div>
+    <h1 class="slide-h">IQueryable&lt;T&gt; — Nothing Runs Until You Ask</h1>
+    <p class="slide-p">Every LINQ operator builds the query. Only the terminal operators send SQL to the database.</p>
+
+    <div class="slide-grid-2">
+        <div>
+            <pre class="code" style="height:100%;"><code><span class="kw">var</span> query = ctx.Products
+    .<span class="mt">TagWith</span>(<span class="st">"GetProducts"</span>)   <span class="cm">// IQueryable — no SQL</span>
+    .<span class="mt">Where</span>(p =&gt; p.Stock &gt; 0)  <span class="cm">// IQueryable — no SQL</span>
+    .<span class="mt">OrderBy</span>(p =&gt; p.Name)      <span class="cm">// IQueryable — no SQL</span>
+    .<span class="mt">Select</span>(p =&gt; <span class="kw">new</span> <span class="tp">Dto</span> {...})<span class="cm">// IQueryable — no SQL</span>
+
+<span class="cm">// SQL executes HERE ? ? ?</span>
+<span class="kw">var</span> list = <span class="kw">await</span> query.<span class="mt">ToListAsync</span>();
+<span class="kw">var</span> one  = <span class="kw">await</span> query.<span class="mt">FirstOrDefaultAsync</span>();
+<span class="kw">var</span> n    = <span class="kw">await</span> query.<span class="mt">CountAsync</span>();
+
+<span class="cm">// Cross-service composition — still one DB call</span>
+<span class="kw">var</span> filtered = baseService.<span class="mt">GetBaseQuery</span>()
+    .<span class="mt">Where</span>(p =&gt; p.Price.Amount &gt; <span class="nm">500</span>)
+    .<span class="mt">Select</span>(...);
+<span class="kw">var</span> result = <span class="kw">await</span> filtered.<span class="mt">ToListAsync</span>();
+<span class="cm">// Still ONE round-trip to the database</span></code></pre>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:1rem;">
+            <div class="card-s">
+                <span class="badge-label badge-label--info">Terminal operators (execute SQL)</span>
+                <ul class="pts" style="margin-top:0.5rem;">
+                    <li class="g"><code>ToListAsync()</code> &mdash; SELECT all matching rows</li>
+                    <li class="g"><code>FirstOrDefaultAsync()</code> &mdash; SELECT TOP 1</li>
+                    <li class="g"><code>CountAsync()</code> &mdash; SELECT COUNT(*)</li>
+                    <li class="g"><code>AnyAsync()</code> &mdash; SELECT TOP 1 (exists check)</li>
+                    <li class="g"><code>ToQueryString()</code> &mdash; returns SQL string (no DB call)</li>
+                </ul>
+            </div>
+            <div class="card-s card-s--accent">
+                <span class="badge-label badge-label--info">Why this matters</span>
+                <ul class="pts" style="margin-top:0.5rem;">
+                    <li>Pass <code>IQueryable</code> between services &mdash; conditions compose into <strong>one query</strong></li>
+                    <li>Add pagination, filtering, ordering <strong>after</strong> defining the base query</li>
+                    <li>The database sees one optimized SQL statement regardless of how many <code>.Where()</code> calls you chain</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>

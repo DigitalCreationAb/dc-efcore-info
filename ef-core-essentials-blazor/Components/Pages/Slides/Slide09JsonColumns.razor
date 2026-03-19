@@ -1,0 +1,65 @@
+﻿<div class="slide">
+    <div class="slide-meta">
+        <span class="ch-tag">Chapter 4 · Advanced EF Core</span>
+        <span class="file-badge">Configurations/ProductConfiguration.cs</span>
+    </div>
+    <h1 class="slide-h">JSON Columns</h1>
+    <p class="slide-p">
+        Store a nested C# object as a single JSON column in the database.
+        EF Core maps it transparently &mdash; query it with normal LINQ, no raw SQL needed.
+    </p>
+
+    <div class="slide-grid-2">
+
+        <div style="display:flex;flex-direction:column;gap:1rem;">
+            <pre class="code"><code><span class="cm">// 1. Define the nested class normally</span>
+<span class="kw">public class</span> <span class="tp">ProductDetails</span>
+{
+    <span class="kw">public string</span>? Brand           { <span class="kw">get</span>; <span class="kw">set</span>; }
+    <span class="kw">public string</span>? Color           { <span class="kw">get</span>; <span class="kw">set</span>; }
+    <span class="kw">public int</span>?    WarrantyMonths  { <span class="kw">get</span>; <span class="kw">set</span>; }
+}
+
+<span class="kw">public class</span> <span class="tp">Product</span>
+{
+    <span class="kw">public int</span>             Id      { <span class="kw">get</span>; <span class="kw">set</span>; }
+    <span class="kw">public string</span>          Name    { <span class="kw">get</span>; <span class="kw">set</span>; } = <span class="st">""</span>;
+    <span class="kw">public</span> <span class="tp">ProductDetails</span>? Details { <span class="kw">get</span>; <span class="kw">set</span>; }
+}</code></pre>
+
+            <pre class="code"><code><span class="cm">// 2. One line in configuration</span>
+builder.<span class="mt">OwnsOne</span>(p =&gt; p.Details, d =&gt;
+{
+    d.<span class="mt">ToJson</span>(); <span class="cm">// ← that's it</span>
+});</code></pre>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:1rem;">
+            <div class="card-s">
+                <span class="badge-label badge-label--info">What the DB stores</span>
+                <pre class="code"><code><span class="cm">-- Products table — Details is one column</span>
+<span class="cm">Id  Name    Details</span>
+<span class="cm">---------------------------------------------</span>
+<span class="cm">1   Laptop  {"Brand":"Dell","Color":"Black",</span>
+<span class="cm">             "WarrantyMonths":24}</span>
+<span class="cm">2   Mouse   {"Brand":"Logitech","Color":"White",</span>
+<span class="cm">             "WarrantyMonths":12}</span></code></pre>
+            </div>
+
+            <pre class="code"><code><span class="cm">// 3. Query with normal LINQ — server-side</span>
+<span class="kw">var</span> dellProducts = <span class="kw">await</span> ctx.Products
+    .<span class="mt">Where</span>(p =&gt; p.Details != <span class="kw">null</span>
+               &amp;&amp; p.Details.Brand == <span class="st">"Dell"</span>)
+    .<span class="mt">Select</span>(p =&gt; <span class="kw">new</span> { p.Name, p.Details!.Color })
+    .<span class="mt">ToListAsync</span>();</code></pre>
+
+            <div class="callout callout--warn">
+                <strong>Always use <code>.Select()</code> with JSON columns.</strong>
+                The entire JSON string is one fat column &mdash; skipping <code>.Select()</code>
+                loads it for every row even when you only need <code>Name</code>.
+            </div>
+        </div>
+
+    </div>
+</div>
+

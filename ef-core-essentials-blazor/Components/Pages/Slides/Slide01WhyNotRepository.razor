@@ -1,0 +1,50 @@
+<div class="slide">
+    <div class="slide-meta">
+        <span class="ch-tag">Chapter 1 · Foundations</span>
+        <span class="file-badge">Services/ProductService.cs</span>
+    </div>
+    <h1 class="slide-h">Why NOT the Repository Pattern?</h1>
+    <p class="slide-p"><code>DbContext</code> already IS the repository <em>and</em> the unit of work. Adding another layer re-invents what you already have.</p>
+
+    <div class="slide-grid-2">
+        <div class="card-s card-s--bad">
+            <span class="badge-label badge-label--bad">Don&apos;t</span>
+            <pre class="code"><code><span class="cm">// Wrapping DbContext adds zero value</span>
+<span class="kw">public interface</span> <span class="tp">IProductRepository</span>
+{
+    <span class="tp">Task</span>&lt;<span class="tp">List</span>&lt;<span class="tp">Product</span>&gt;&gt; <span class="mt">GetAllAsync</span>();
+    <span class="tp">Task</span>&lt;<span class="tp">Product</span>?&gt; <span class="mt">GetByIdAsync</span>(<span class="kw">int</span> id);
+    <span class="tp">Task</span> <span class="mt">AddAsync</span>(<span class="tp">Product</span> p);
+    <span class="tp">Task</span> <span class="mt">SaveAsync</span>();
+    <span class="cm">// ...you've re-invented DbSet&lt;T&gt;</span>
+}
+
+<span class="cm">// What you lose:</span>
+<span class="cm">// ? IQueryable composability</span>
+<span class="cm">// ? .AsNoTracking(), .TagWith()</span>
+<span class="cm">// ? Every new entity = new repository</span></code></pre>
+        </div>
+        <div class="card-s card-s--good">
+            <span class="badge-label badge-label--good">Do This</span>
+            <pre class="code"><code><span class="cm">// Use DbContext directly in services</span>
+<span class="kw">public class</span> <span class="tp">ProductService</span>(<span class="tp">AppDbContext</span> ctx)
+{
+    <span class="kw">public async</span> <span class="tp">Task</span>&lt;<span class="tp">List</span>&lt;<span class="tp">ProductDto</span>&gt;&gt; <span class="mt">GetAsync</span>()
+        =&gt; <span class="kw">await</span> ctx.Products
+            .<span class="mt">WhereActive</span>()       <span class="cm">// extension method</span>
+            .<span class="mt">Select</span>(p =&gt; <span class="kw">new</span> <span class="tp">ProductDto</span> { ... })
+            .<span class="mt">ToListAsync</span>();
+}
+
+<span class="cm">// What you keep:</span>
+<span class="cm">// ? Full IQueryable composability</span>
+<span class="cm">// ? All EF Core features available</span>
+<span class="cm">// ? No extra abstraction layer</span></code></pre>
+        </div>
+    </div>
+    <div class="callout">
+        <strong>DbContext = IRepository + IUnitOfWork.</strong> It tracks changes,
+        manages transactions, and exposes <code>IQueryable&lt;T&gt;</code> for every entity.
+        A repository wrapper loses composability and forces you to re-expose the full API with no benefit.
+    </div>
+</div>

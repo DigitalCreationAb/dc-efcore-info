@@ -1,0 +1,51 @@
+<div class="slide">
+    <div class="slide-meta">
+        <span class="ch-tag">Chapter 2 · Data Access Patterns</span>
+        <span class="file-badge">Services/ProductService.cs</span>
+    </div>
+    <h1 class="slide-h">Always <code>.Select()</code> When Loading Lists</h1>
+    <p class="slide-p">Projecting to a DTO is the single biggest performance lever you have. Without it, every column &mdash; including large JSON blobs &mdash; travels over the wire.</p>
+
+    <div class="slide-grid-2">
+        <div class="card-s card-s--bad">
+            <span class="badge-label badge-label--bad">Without .Select()</span>
+            <pre class="code"><code><span class="cm">// Loads ALL columns for every row:</span>
+<span class="cm">// Id, Name, Description, Price, Currency,</span>
+<span class="cm">// Stock, SiteId, CategoryId,</span>
+<span class="cm">// Metadata (potentially large JSON!),</span>
+<span class="cm">// IsDeleted, CreatedAt, CreatedBy,</span>
+<span class="cm">// UpdatedAt, UpdatedBy...</span>
+<span class="kw">var</span> products = <span class="kw">await</span> ctx.Products
+    .<span class="mt">ToListAsync</span>();
+
+<span class="cm">// Generated SQL:</span>
+<span class="cm">// SELECT [Id],[Name],[Description],</span>
+<span class="cm">// [Price],[Currency],[Stock],</span>
+<span class="cm">// [Metadata],[IsDeleted],... (all 14 cols)</span></code></pre>
+        </div>
+        <div class="card-s card-s--good">
+            <span class="badge-label badge-label--good">With .Select()</span>
+            <pre class="code"><code><span class="cm">// Only 5 columns. Metadata stays in the DB.</span>
+<span class="kw">var</span> products = <span class="kw">await</span> ctx.Products
+    .<span class="mt">Select</span>(p =&gt; <span class="kw">new</span> <span class="tp">ProductListDto</span>
+    {
+        Id           = p.Id,
+        Name         = p.Name,
+        Price        = p.Price.Amount,
+        Currency     = p.Price.Currency,
+        CategoryName = p.Category.Name <span class="cm">// JOIN!</span>
+    })
+    .<span class="mt">ToListAsync</span>();
+
+<span class="cm">// Generated SQL:</span>
+<span class="cm">// SELECT p.Id, p.Name, p.Price,</span>
+<span class="cm">// p.Currency, c.Name AS CategoryName</span>
+<span class="cm">// FROM Products p JOIN Categories c ...</span></code></pre>
+        </div>
+    </div>
+    <div class="callout callout--warn" style="margin-top:1rem;">
+        <strong>Rule of thumb:</strong> Use <code>.Select()</code> whenever loading a <strong>list</strong>.
+        For a <strong>single item by PK</strong> (e.g. before updating), loading the full entity is fine &mdash;
+        EF Core needs the tracked entity to detect changes.
+    </div>
+</div>
